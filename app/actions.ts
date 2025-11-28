@@ -106,66 +106,6 @@ export async function generateSignedPdf(documentId: string) {
     }
 }
 
-export async function updatePresence({
-    id,
-    documentId,
-    name,
-    color,
-    x,
-    y,
-    page
-}: {
-    id: string;
-    documentId: string;
-    name: string;
-    color: string;
-    x: number;
-    y: number;
-    page: number;
-}) {
-    try {
-        await sql`
-            INSERT INTO collaborators (id, document_id, name, color, x, y, page, updated_at)
-            VALUES (${id}, ${documentId}, ${name}, ${color}, ${x}, ${y}, ${page}, NOW())
-            ON CONFLICT (id) DO UPDATE SET
-                document_id = EXCLUDED.document_id,
-                name = EXCLUDED.name,
-                color = EXCLUDED.color,
-                x = EXCLUDED.x,
-                y = EXCLUDED.y,
-                page = EXCLUDED.page,
-                updated_at = NOW();
-        `;
-    } catch (error) {
-        console.error('Error updating presence:', error);
-    }
-}
-
-export async function getCollaborators(documentId: string) {
-    try {
-        // Get collaborators active in the last 10 seconds
-        const { rows } = await sql`
-            SELECT * FROM collaborators 
-            WHERE document_id = ${documentId} 
-            AND updated_at > NOW() - INTERVAL '10 seconds'
-        `;
-        return rows;
-    } catch (error) {
-        console.error('Error fetching collaborators:', error);
-        return [];
-    }
-}
-
-export async function getSignatures(documentId: string) {
-    try {
-        const { rows } = await sql`SELECT * FROM signatures WHERE document_id = ${documentId}`;
-        return rows as Signature[];
-    } catch (error) {
-        console.error('Error fetching signatures:', error);
-        return [];
-    }
-}
-
 export async function deleteSignature(signatureId: string) {
     try {
         await sql`DELETE FROM signatures WHERE id = ${signatureId}`;

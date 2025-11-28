@@ -6,7 +6,7 @@ import { Rnd } from 'react-rnd';
 import SignatureCanvas from 'react-signature-canvas';
 import { Loader2, PenTool, Save, Trash2, Upload as UploadIcon, X, Plus, Download, Share2, History, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { addSignatures, generateSignedPdf, deleteSignature, updateSignature, deleteDocument, updatePresence, getCollaborators, getSignatures } from '@/app/actions';
+import { addSignatures, generateSignedPdf, deleteSignature, updateSignature, deleteDocument } from '@/app/actions';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
@@ -31,18 +31,6 @@ interface Signature {
     scale: number; // Scale at which it was created
 }
 
-interface Collaborator {
-    id: string;
-    name: string;
-    color: string;
-    x: number;
-    y: number;
-    page: number;
-    updated_at: string;
-}
-
-const COLORS = ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#f43f5e'];
-
 export default function ClientSigningPage({ document, existingSignatures }: ClientSigningPageProps) {
     const [numPages, setNumPages] = useState<number>(0);
     const [scale, setScale] = useState(1.0);
@@ -58,15 +46,8 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
     const [signatureData, setSignatureData] = useState('');
     const [localSignatures, setLocalSignatures] = useState<Signature[]>(existingSignatures);
 
-    // Collaboration state
-    const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
-    const [mySessionId] = useState(() => crypto.randomUUID());
-    const [myColor] = useState(() => COLORS[Math.floor(Math.random() * COLORS.length)]);
-    const [draggingId, setDraggingId] = useState<string | null>(null);
-
     const sigCanvas = useRef<SignatureCanvas>(null);
     const containerRef = useRef<HTMLDivElement>(null);
-    const lastCursorUpdate = useRef<number>(0);
 
     // Load my signatures from local storage on mount
     useEffect(() => {
@@ -95,76 +76,6 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
         updateScale();
         return () => window.removeEventListener('resize', updateScale);
     }, []);
-
-    // Polling for collaboration (Signatures and Presence)
-    useEffect(() => {
-        const interval = setInterval(async () => {
-            // 1. Fetch Collaborators
-            const activeCollaborators = await getCollaborators(document.id) as unknown as Collaborator[];
-            setCollaborators(activeCollaborators.filter(c => c.id !== mySessionId));
-
-            // 2. Fetch Signatures (Real-time updates)
-            const latestSignatures = await getSignatures(document.id) as unknown as Signature[];
-
-            setLocalSignatures(prev => {
-                // Merge strategy:
-                // - Keep local optimistic updates if I am dragging/editing (not implemented fully, but draggingId helps)
-                // - Update others' signatures
-                // - Add new signatures
-                // - Remove deleted signatures
-
-                // Simple merge: Use server data, but preserve position of currently dragged item
-                if (draggingId) {
-                    const draggedSig = prev.find(s => s.id === draggingId);
-                    return latestSignatures.map(serverSig => {
-                        if (serverSig.id === draggingId && draggedSig) {
-                            return draggedSig; // Keep local state for dragged item
-                        }
-                        return serverSig;
-                    });
-                }
-                return latestSignatures;
-            });
-
-        }, 500); // Poll every 500ms for smoother real-time updates
-
-        return () => clearInterval(interval);
-    }, [document.id, mySessionId, draggingId]);
-
-    const handleMouseMove = (e: React.MouseEvent, pageNumber: number) => {
-        const now = Date.now();
-        if (now - lastCursorUpdate.current > 100) { // Throttle to 100ms
-            lastCursorUpdate.current = now;
-
-            // Calculate relative coordinates
-            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-            const x = (e.clientX - rect.left) / scale;
-            const y = (e.clientY - rect.top) / scale;
-
-            updatePresence({
-                id: mySessionId,
-                documentId: document.id,
-                name: signerName || 'Anonymous',
-                color: myColor,
-                x: Math.round(x),
-                y: Math.round(y),
-                page: pageNumber
-            });
-        }
-    };
-
-    // Throttled drag handler for real-time visibility
-    const lastDragUpdate = useRef<number>(0);
-    const handleDrag = (id: string, d: any) => {
-        const now = Date.now();
-        if (now - lastDragUpdate.current > 200) { // Throttle to 200ms
-            lastDragUpdate.current = now;
-            const newX = d.x / scale;
-            const newY = d.y / scale;
-            // Fire and forget - don't await
-            updateSignature(id, { x: newX, y: newY });
-        }
-    };
 
     function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
         setNumPages(numPages);
@@ -195,41 +106,18 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
         const dataToUse = dataStr || signatureData;
         if (!signerName || !dataToUse) return;
 
-        // Calculate better placement: Center of the viewport if possible, or at least somewhat centered on page
-        // Since we don't have exact page dimensions easily, we'll use a safe default that is likely visible
-        // Assuming A4 (approx 600px width at scale 1), center is ~300.
-        // We'll place it at x=100, y=200 to be more likely in view than 100,100
-        // If we could access containerRef.scrollTop, we could be smarter, but mapping to page coordinates is hard.
-        // Let's just move it down a bit so it's not at the very top edge.
-
         const newSignature = {
             id: crypto.randomUUID(),
             name: signerName,
             data: dataToUse,
-            x: 150, // Slightly more centered
-            y: 250, // Further down to avoid being hidden by toolbars or top edge
+            x: 150,
+            y: 250,
             width: 200,
             height: 100,
             page: activePage,
-            scale: scale, // Store current scale
+            scale: scale,
             created_at: new Date().toISOString()
         };
-
-        // Add to localSignatures immediately (optimistic)
-        // We treat newSignatures as just a temporary holder before saving?
-        // Actually, the previous logic used `newSignatures` separate from `existingSignatures`.
-        // To support real-time, we should unify them or treat `newSignatures` as "unsaved".
-        // But the user wants real-time updates.
-        // If I add a signature, it should be saved to DB immediately for others to see?
-        // The previous flow was: Add -> (Local) -> Save -> (DB).
-        // If I want real-time, I should probably save immediately?
-        // Or keep the "Save" button?
-        // If I keep "Save" button, others won't see it until I save.
-        // User said: "kalau ada yang sudah ada orang baru menambahkan ttd tangannya termasuk realtime".
-        // This implies they expect to see it as soon as it's added?
-        // But usually "Draft" signatures are private.
-        // Let's stick to the existing flow: You add it (draft), then Save. Once Saved, it's real-time.
-        // So `newSignatures` are private drafts.
 
         setNewSignatures([...newSignatures, newSignature]);
         setIsDrawing(false);
@@ -265,8 +153,7 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
         } catch (error) {
             console.error(error);
             alert('Failed to delete signature');
-            // Revert on error (could reload or fetch)
-            // window.location.reload(); // Removed as polling handles it
+            window.location.reload();
         }
     };
 
@@ -304,9 +191,8 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
             setMySignatureIds(updatedMyIds);
             localStorage.setItem('my_signatures', JSON.stringify(updatedMyIds));
 
-            setNewSignatures([]); // Clear drafts
-            alert('Signatures saved!');
-            // No reload needed, polling will pick it up
+            alert('Signatures saved successfully!');
+            window.location.reload();
         } catch (error) {
             console.error(error);
             alert('Failed to save signatures.');
@@ -470,7 +356,6 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
                                     className="relative mb-4 group"
                                     onMouseEnter={() => setActivePage(pageNumber)}
                                     onClick={() => setActivePage(pageNumber)}
-                                    onMouseMove={(e) => handleMouseMove(e, pageNumber)}
                                 >
                                     <div className={cn("absolute -left-12 top-0 p-2 bg-gray-800 text-white text-xs rounded opacity-0 transition-opacity", activePage === pageNumber && "opacity-100")}>
                                         Page {pageNumber}
@@ -482,25 +367,6 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
                                         renderTextLayer={false}
                                         renderAnnotationLayer={false}
                                     />
-
-                                    {/* Collaborator Cursors */}
-                                    {collaborators.filter(c => c.page === pageNumber).map(c => (
-                                        <div
-                                            key={c.id}
-                                            className="absolute pointer-events-none z-[60] transition-all duration-300 ease-linear"
-                                            style={{
-                                                left: c.x * scale,
-                                                top: c.y * scale,
-                                            }}
-                                        >
-                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ fill: c.color }}>
-                                                <path d="M5.65376 12.3673H5.46026L5.31717 12.4976L0.500002 16.8829L0.500002 1.19177L11.7841 12.3673H5.65376Z" />
-                                            </svg>
-                                            <div className="absolute left-4 top-4 px-2 py-1 rounded text-xs text-white whitespace-nowrap" style={{ backgroundColor: c.color }}>
-                                                {c.name}
-                                            </div>
-                                        </div>
-                                    ))}
 
                                     {/* Existing Signatures */}
                                     {localSignatures.filter(s => s.page === pageNumber).map((sig) => {
@@ -516,17 +382,12 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
                                                         width: sig.width * scale,
                                                         height: sig.height * scale,
                                                     }}
-                                                    position={draggingId === sig.id ? undefined : { x: sig.x * scale, y: sig.y * scale }}
-                                                    size={{ width: sig.width * scale, height: sig.height * scale }}
                                                     bounds="parent"
                                                     cancel=".no-drag"
-                                                    onDragStart={() => setDraggingId(sig.id)}
-                                                    onDrag={(e, d) => handleDrag(sig.id, d)}
                                                     onDragStop={(e, d) => {
                                                         const newX = d.x / scale;
                                                         const newY = d.y / scale;
                                                         handleUpdateSavedSignature(sig.id, { x: newX, y: newY, width: sig.width, height: sig.height, page: sig.page });
-                                                        setDraggingId(null);
                                                     }}
                                                     onResizeStop={(e, direction, ref, delta, position) => {
                                                         const newWidth = parseInt(ref.style.width) / scale;
@@ -572,7 +433,6 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
                                                         height: sig.height * scale,
                                                         border: '2px solid transparent',
                                                         zIndex: 50,
-                                                        transition: 'all 0.3s ease-out' // Smooth transition for others' moves
                                                     }}
                                                     className="group/locked pointer-events-none"
                                                 >
