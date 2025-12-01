@@ -136,6 +136,20 @@ export default function Home() {
         {/* Upload List */}
         {uploads.length > 0 && (
           <div className="w-full space-y-3 animate-in fade-in slide-in-from-bottom-4">
+            <div className="flex justify-end mb-2">
+              {uploads.every(u => u.status === 'success') && uploads.length > 1 && (
+                <button
+                  onClick={() => {
+                    const ids = uploads.map(u => u.documentId).join(',');
+                    router.push(`/doc/${ids}`);
+                  }}
+                  className="flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                >
+                  Sign All ({uploads.length})
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </button>
+              )}
+            </div>
             {uploads.map((item) => (
               <div
                 key={item.id}

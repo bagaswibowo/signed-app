@@ -106,6 +106,69 @@ export async function generateSignedPdf(documentId: string) {
     }
 }
 
+export async function generateSignedZip(documentIds: string[]) {
+    try {
+        const JSZip = (await import('jszip')).default;
+        const zip = new JSZip();
+
+        // Process each document
+        for (const docId of documentIds) {
+            // 1. Fetch document and signatures
+            const docResult = await sql`SELECT * FROM documents WHERE id = ${docId}`;
+            const sigResult = await sql`SELECT * FROM signatures WHERE document_id = ${docId}`;
+
+            if (docResult.rows.length === 0) continue;
+            const document = docResult.rows[0];
+            const signatures = sigResult.rows;
+
+            // 2. Load PDF
+            const pdfResponse = await fetch(document.url);
+            const pdfBuffer = await pdfResponse.arrayBuffer();
+            const pdfDoc = await PDFDocument.load(pdfBuffer);
+
+            // 3. Embed signatures
+            for (const sig of signatures) {
+                const signatureImage = await pdfDoc.embedPng(sig.data);
+                const pageIndex = sig.page - 1;
+
+                if (pageIndex >= 0 && pageIndex < pdfDoc.getPageCount()) {
+                    const page = pdfDoc.getPages()[pageIndex];
+                    const { height: pageHeight } = page.getSize();
+
+                    // Coordinates are already stored as PDF points (unscaled) in DB
+                    const y = pageHeight - sig.y - sig.height;
+
+                    page.drawImage(signatureImage, {
+                        x: sig.x,
+                        y: y,
+                        width: sig.width,
+                        height: sig.height,
+                    });
+                }
+            }
+
+            // 4. Save PDF
+            const pdfBytes = await pdfDoc.save();
+            const fileName = document.url.split('/').pop() || `document-${docId}.pdf`;
+            zip.file(fileName, pdfBytes);
+        }
+
+        // 5. Generate ZIP
+        const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
+
+        // 6. Upload ZIP to Blob
+        const blob = await put(`signed-documents-${Date.now()}.zip`, zipContent, {
+            access: 'public',
+        });
+
+        return { url: blob.url };
+
+    } catch (error) {
+        console.error('Error generating ZIP:', error);
+        throw new Error('Failed to generate ZIP');
+    }
+}
+
 export async function deleteSignature(signatureId: string) {
     try {
         await sql`DELETE FROM signatures WHERE id = ${signatureId}`;

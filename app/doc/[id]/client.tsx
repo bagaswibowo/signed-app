@@ -6,7 +6,7 @@ import { Rnd } from 'react-rnd';
 import SignatureCanvas from 'react-signature-canvas';
 import { Loader2, PenTool, Save, Trash2, Upload as UploadIcon, X, Plus, Download, Share2, History, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { addSignatures, generateSignedPdf, deleteSignature, updateSignature, deleteDocument } from '@/app/actions';
+import { addSignatures, generateSignedPdf, deleteSignature, updateSignature, deleteDocument, generateSignedZip } from '@/app/actions';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
@@ -14,7 +14,7 @@ import 'react-pdf/dist/Page/TextLayer.css';
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface ClientSigningPageProps {
-    document: any;
+    documents: any[];
     existingSignatures: any[];
 }
 
@@ -29,10 +29,12 @@ interface Signature {
     page: number;
     created_at: string;
     scale: number; // Scale at which it was created
+    document_id?: string; // Optional for new signatures, present for existing
 }
 
-export default function ClientSigningPage({ document, existingSignatures }: ClientSigningPageProps) {
-    const [numPages, setNumPages] = useState<number>(0);
+export default function ClientSigningPage({ documents, existingSignatures }: ClientSigningPageProps) {
+    // Map of docId -> numPages
+    const [numPagesMap, setNumPagesMap] = useState<Record<string, number>>({});
     const [scale, setScale] = useState(1.0);
     const [newSignatures, setNewSignatures] = useState<Signature[]>([]);
     const [isDrawing, setIsDrawing] = useState(false);
@@ -40,6 +42,7 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
     const [isSaving, setIsSaving] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [activePage, setActivePage] = useState<number>(1);
+    const [activeDocId, setActiveDocId] = useState<string>(documents[0]?.id);
     const [mySignatureIds, setMySignatureIds] = useState<string[]>([]);
     const [showHistory, setShowHistory] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -67,19 +70,44 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
     useEffect(() => {
         const updateScale = () => {
             if (containerRef.current) {
-                const width = containerRef.current.clientWidth;
-                const targetScale = Math.min(width / 600, 1.5);
-                setScale(targetScale);
+                const containerWidth = containerRef.current.clientWidth;
+                const newScale = Math.min(1, (containerWidth - 48) / 600); // 600px base width, 48px padding
+                setScale(newScale);
             }
         };
 
-        window.addEventListener('resize', updateScale);
         updateScale();
+        window.addEventListener('resize', updateScale);
         return () => window.removeEventListener('resize', updateScale);
     }, []);
 
-    function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
-        setNumPages(numPages);
+    function formatFilename(url: string): string {
+        try {
+            // 1. Get filename from URL
+            const filename = url.split('/').pop() || '';
+
+            // 2. Decode URL (remove %20 etc)
+            const decoded = decodeURIComponent(filename);
+
+            // 3. Remove Vercel Blob suffix (usually -[randomString].pdf)
+            // Pattern: look for dash followed by alphanumeric string before extension
+            const cleanName = decoded.replace(/-[a-zA-Z0-9]+\.pdf$/, '.pdf');
+
+            // 4. Truncate if too long (keep extension)
+            if (cleanName.length > 50) {
+                const ext = cleanName.split('.').pop();
+                const name = cleanName.substring(0, cleanName.lastIndexOf('.'));
+                return `${name.substring(0, 45)}...${ext}`;
+            }
+
+            return cleanName;
+        } catch (e) {
+            return url.split('/').pop() || 'Document';
+        }
+    }
+
+    function onDocumentLoadSuccess(docId: string, { numPages }: { numPages: number }) {
+        setNumPagesMap(prev => ({ ...prev, [docId]: numPages }));
     }
 
     const handleCreateSignature = () => {
@@ -116,6 +144,7 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
             width: 200,
             height: 100,
             page: activePage,
+            documentId: activeDocId, // Add documentId to signature
             scale: scale,
             created_at: new Date().toISOString()
         };
@@ -165,31 +194,44 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
         try {
             // 1. Save New Signatures
             if (newSignatures.length > 0) {
-                // We need to calculate normalized coordinates for DB
-                const signaturesToSave = newSignatures.map(sig => {
-                    const safeScale = scale || 1;
-                    const x = Math.round((sig.x || 0) / safeScale);
-                    const y = Math.round((sig.y || 0) / safeScale);
-                    const width = Math.round((sig.width || 100) / safeScale);
-                    const height = Math.round((sig.height || 50) / safeScale);
+                // Group signatures by document ID
+                const signaturesByDoc = newSignatures.reduce((acc, sig) => {
+                    const docId = (sig as any).documentId || documents[0].id;
+                    if (!acc[docId]) acc[docId] = [];
+                    acc[docId].push(sig);
+                    return acc;
+                }, {} as Record<string, Signature[]>);
 
-                    return {
-                        ...sig,
-                        x: isNaN(x) ? 0 : x,
-                        y: isNaN(y) ? 0 : y,
-                        width: isNaN(width) ? 100 : width,
-                        height: isNaN(height) ? 50 : height,
-                        page: sig.page || 1
-                    };
-                });
+                const allSavedIds: string[] = [];
 
-                const savedIds = await addSignatures({
-                    documentId: document.id,
-                    signatures: signaturesToSave
-                });
+                // Save for each document
+                for (const [docId, sigs] of Object.entries(signaturesByDoc)) {
+                    const signaturesToSave = sigs.map(sig => {
+                        const safeScale = scale || 1;
+                        const x = Math.round((sig.x || 0) / safeScale);
+                        const y = Math.round((sig.y || 0) / safeScale);
+                        const width = Math.round((sig.width || 100) / safeScale);
+                        const height = Math.round((sig.height || 50) / safeScale);
+
+                        return {
+                            ...sig,
+                            x: isNaN(x) ? 0 : x,
+                            y: isNaN(y) ? 0 : y,
+                            width: isNaN(width) ? 100 : width,
+                            height: isNaN(height) ? 50 : height,
+                            page: sig.page || 1
+                        };
+                    });
+
+                    const savedIds = await addSignatures({
+                        documentId: docId,
+                        signatures: signaturesToSave
+                    });
+                    allSavedIds.push(...savedIds);
+                }
 
                 // Update local storage with new IDs
-                const updatedMyIds = [...mySignatureIds, ...savedIds];
+                const updatedMyIds = [...mySignatureIds, ...allSavedIds];
                 setMySignatureIds(updatedMyIds);
                 localStorage.setItem('my_signatures', JSON.stringify(updatedMyIds));
             }
@@ -224,16 +266,26 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
     const handleDownloadPdf = async () => {
         setIsGenerating(true);
         try {
-            const result = await generateSignedPdf(document.id);
-            // Open PDF in new tab
+            let result;
+            if (documents.length > 1) {
+                // Download ZIP
+                result = await generateSignedZip(documents.map(d => d.id));
+            } else {
+                // Download Single PDF
+                result = await generateSignedPdf(documents[0].id);
+            }
+
+            // Open in new tab
             window.open(result.url, '_blank');
 
-            // Auto-delete document after download
-            // We'll give a small delay to ensure the download/open has started
+            // Auto-delete documents after download
             setTimeout(async () => {
                 try {
-                    await deleteDocument(document.id, document.url);
-                    alert('Document downloaded. For security, the document has been automatically deleted from the server.');
+                    // Delete all documents
+                    for (const doc of documents) {
+                        await deleteDocument(doc.id, doc.url);
+                    }
+                    alert('Documents downloaded. For security, they have been automatically deleted from the server.');
                     window.location.href = '/';
                 } catch (delError) {
                     console.error('Failed to auto-delete:', delError);
@@ -242,7 +294,7 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
 
         } catch (error) {
             console.error(error);
-            alert('Failed to generate PDF.');
+            alert('Failed to generate PDF/ZIP.');
         } finally {
             setIsGenerating(false);
         }
@@ -259,15 +311,17 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
     };
 
     const handleDeleteDocument = async () => {
-        if (!confirm('Are you sure you want to delete this ENTIRE document? This action cannot be undone and will delete it for everyone.')) return;
+        if (!confirm('Are you sure you want to delete ALL documents? This action cannot be undone.')) return;
 
         try {
-            await deleteDocument(document.id, document.url);
-            alert('Document deleted successfully');
+            for (const doc of documents) {
+                await deleteDocument(doc.id, doc.url);
+            }
+            alert('Documents deleted successfully');
             window.location.href = '/';
         } catch (error) {
             console.error(error);
-            alert('Failed to delete document');
+            alert('Failed to delete documents');
         }
     };
 
@@ -324,7 +378,11 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
 
                 <div className="flex gap-2">
                     <button
-                        onClick={() => setIsDrawing(true)}
+                        onClick={() => {
+                            setIsDrawing(true);
+                            // Default to first doc if none active (shouldn't happen with mouse enter)
+                            if (!activeDocId) setActiveDocId(documents[0].id);
+                        }}
                         className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
                     >
                         <Plus className="w-4 h-4 mr-2" />
@@ -339,69 +397,153 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
                         className="flex items-center px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-900 disabled:opacity-50"
                     >
                         {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                        Download PDF
+                        {documents.length > 1 ? 'Download ZIP' : 'Download PDF'}
                     </button>
                 </div>
             </div>
 
             <div className="flex flex-1 overflow-hidden">
                 {/* PDF View */}
-                <div className="flex-1 overflow-auto p-4 flex justify-center bg-gray-100" ref={containerRef}>
-                    <Document
-                        file={document.url}
-                        onLoadSuccess={onDocumentLoadSuccess}
-                        loading={<Loader2 className="w-8 h-8 animate-spin text-blue-500" />}
-                        className="shadow-lg"
-                    >
-                        {Array.from(new Array(numPages), (el, index) => {
-                            const pageNumber = index + 1;
-                            return (
-                                <div
-                                    key={`page_${pageNumber}`}
-                                    className="relative mb-4 group"
-                                    onMouseEnter={() => setActivePage(pageNumber)}
-                                    onClick={() => setActivePage(pageNumber)}
-                                >
-                                    <div className={cn("absolute -left-12 top-0 p-2 bg-gray-800 text-white text-xs rounded opacity-0 transition-opacity", activePage === pageNumber && "opacity-100")}>
-                                        Page {pageNumber}
-                                    </div>
+                <div className="flex-1 overflow-auto p-4 flex flex-col items-center bg-gray-100 space-y-8" ref={containerRef}>
+                    {documents.map((doc, docIndex) => (
+                        <div key={doc.id} className="relative w-full max-w-3xl" onMouseEnter={() => setActiveDocId(doc.id)}>
+                            <div className="bg-white p-2 shadow-sm mb-2 rounded text-center font-medium text-gray-600 break-words px-8">
+                                {formatFilename(doc.url)}
+                            </div>
+                            <Document
+                                file={doc.url}
+                                onLoadSuccess={(pdf) => onDocumentLoadSuccess(doc.id, pdf)}
+                                loading={<Loader2 className="w-8 h-8 animate-spin text-blue-500" />}
+                                className="flex flex-col items-center"
+                            >
+                                {Array.from(new Array(numPagesMap[doc.id] || 0), (el, index) => {
+                                    const pageNumber = index + 1;
+                                    return (
+                                        <div
+                                            key={`page_${doc.id}_${pageNumber}`}
+                                            className="relative mb-4 group w-fit shadow-lg"
+                                            onMouseEnter={() => {
+                                                setActivePage(pageNumber);
+                                                setActiveDocId(doc.id);
+                                            }}
+                                            onClick={() => {
+                                                setActivePage(pageNumber);
+                                                setActiveDocId(doc.id);
+                                            }}
+                                        >
+                                            <div className={cn("absolute -left-12 top-0 p-2 bg-gray-800 text-white text-xs rounded opacity-0 transition-opacity", activePage === pageNumber && activeDocId === doc.id && "opacity-100")}>
+                                                Page {pageNumber}
+                                            </div>
 
-                                    <Page
-                                        pageNumber={pageNumber}
-                                        scale={scale}
-                                        renderTextLayer={false}
-                                        renderAnnotationLayer={false}
-                                    />
+                                            <Page
+                                                pageNumber={pageNumber}
+                                                scale={scale}
+                                                renderTextLayer={false}
+                                                renderAnnotationLayer={false}
+                                            />
 
-                                    {/* Existing Signatures */}
-                                    {localSignatures.filter(s => s.page === pageNumber).map((sig) => {
-                                        const isMine = mySignatureIds.includes(sig.id);
+                                            {/* Existing Signatures */}
+                                            {localSignatures.filter(s => s.document_id === doc.id && s.page === pageNumber).map((sig) => {
+                                                const isMine = mySignatureIds.includes(sig.id);
 
-                                        if (isMine) {
-                                            return (
+                                                if (isMine) {
+                                                    return (
+                                                        <Rnd
+                                                            key={sig.id}
+                                                            default={{
+                                                                x: sig.x * scale,
+                                                                y: sig.y * scale,
+                                                                width: sig.width * scale,
+                                                                height: sig.height * scale,
+                                                            }}
+                                                            bounds="parent"
+                                                            cancel=".no-drag"
+                                                            onDragStop={(e, d) => {
+                                                                const newX = d.x / scale;
+                                                                const newY = d.y / scale;
+                                                                handleUpdateSavedSignature(sig.id, { x: newX, y: newY, width: sig.width, height: sig.height, page: sig.page });
+                                                            }}
+                                                            onResizeStop={(e, direction, ref, delta, position) => {
+                                                                const newWidth = parseInt(ref.style.width) / scale;
+                                                                const newHeight = parseInt(ref.style.height) / scale;
+                                                                const newX = position.x / scale;
+                                                                const newY = position.y / scale;
+                                                                handleUpdateSavedSignature(sig.id, { x: newX, y: newY, width: newWidth, height: newHeight, page: sig.page });
+                                                            }}
+                                                            className="border-2 border-dashed border-blue-500 group/locked z-50"
+                                                        >
+                                                            <div className="w-full h-full relative">
+                                                                <img
+                                                                    src={sig.data}
+                                                                    alt={`Signature by ${sig.name}`}
+                                                                    className="w-full h-full object-contain pointer-events-none"
+                                                                />
+                                                                <div className="absolute -top-6 left-0 bg-blue-600 text-white text-xs px-2 py-0.5 rounded opacity-0 group-hover/locked:opacity-100 transition-opacity whitespace-nowrap">
+                                                                    {sig.name} (You - Saved)
+                                                                </div>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        e.preventDefault();
+                                                                        removeExistingSignature(sig.id);
+                                                                    }}
+                                                                    onMouseDown={(e) => e.stopPropagation()}
+                                                                    className="no-drag absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover/locked:opacity-100 transition-opacity hover:bg-red-600 pointer-events-auto cursor-pointer z-50"
+                                                                >
+                                                                    <Trash2 className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
+                                                        </Rnd>
+                                                    );
+                                                } else {
+                                                    return (
+                                                        <div
+                                                            key={sig.id}
+                                                            style={{
+                                                                position: 'absolute',
+                                                                left: sig.x * scale,
+                                                                top: sig.y * scale,
+                                                                width: sig.width * scale,
+                                                                height: sig.height * scale,
+                                                                border: '2px solid transparent',
+                                                                zIndex: 50,
+                                                            }}
+                                                            className="group/locked pointer-events-none"
+                                                        >
+                                                            <img
+                                                                src={sig.data}
+                                                                alt={`Signature by ${sig.name}`}
+                                                                className="w-full h-full object-contain pointer-events-none"
+                                                            />
+                                                            <div className="absolute -top-6 left-0 bg-gray-600 text-white text-xs px-2 py-0.5 rounded opacity-0 group-hover/locked:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                                                {sig.name} (Locked)
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                            })}
+
+                                            {/* New Signatures (Editable) */}
+                                            {newSignatures.filter(s => ((s as any).documentId || documents[0].id) === doc.id && s.page === pageNumber).map((sig) => (
                                                 <Rnd
                                                     key={sig.id}
                                                     default={{
-                                                        x: sig.x * scale,
-                                                        y: sig.y * scale,
-                                                        width: sig.width * scale,
-                                                        height: sig.height * scale,
+                                                        x: sig.x,
+                                                        y: sig.y,
+                                                        width: sig.width,
+                                                        height: sig.height,
                                                     }}
                                                     bounds="parent"
                                                     cancel=".no-drag"
-                                                    onDragStop={(e, d) => {
-                                                        const newX = d.x / scale;
-                                                        const newY = d.y / scale;
-                                                        handleUpdateSavedSignature(sig.id, { x: newX, y: newY, width: sig.width, height: sig.height, page: sig.page });
-                                                    }}
+                                                    onDragStop={(e, d) => updateDraftSignature(sig.id, { x: d.x, y: d.y })}
                                                     onResizeStop={(e, direction, ref, delta, position) => {
-                                                        const newWidth = parseInt(ref.style.width) / scale;
-                                                        const newHeight = parseInt(ref.style.height) / scale;
-                                                        const newX = position.x / scale;
-                                                        const newY = position.y / scale;
-                                                        handleUpdateSavedSignature(sig.id, { x: newX, y: newY, width: newWidth, height: newHeight, page: sig.page });
+                                                        updateDraftSignature(sig.id, {
+                                                            width: parseInt(ref.style.width),
+                                                            height: parseInt(ref.style.height),
+                                                            ...position,
+                                                        });
                                                     }}
-                                                    className="border-2 border-dashed border-blue-500 group/locked z-50"
+                                                    className="border-2 border-blue-500/50 hover:border-blue-600 group/sig z-50"
                                                 >
                                                     <div className="w-full h-full relative">
                                                         <img
@@ -409,100 +551,29 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
                                                             alt={`Signature by ${sig.name}`}
                                                             className="w-full h-full object-contain pointer-events-none"
                                                         />
-                                                        <div className="absolute -top-6 left-0 bg-blue-600 text-white text-xs px-2 py-0.5 rounded opacity-0 group-hover/locked:opacity-100 transition-opacity whitespace-nowrap">
-                                                            {sig.name} (You - Saved)
+                                                        {/* Improved Accessibility: Darker background, larger text, always visible or high contrast */}
+                                                        <div className="absolute -top-8 left-0 bg-slate-900 text-white text-sm font-medium px-3 py-1 rounded shadow-md opacity-0 group-hover/sig:opacity-100 transition-opacity whitespace-nowrap z-50">
+                                                            {sig.name} (You)
                                                         </div>
                                                         <button
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
-                                                                e.preventDefault();
-                                                                removeExistingSignature(sig.id);
+                                                                removeSignature(sig.id);
                                                             }}
                                                             onMouseDown={(e) => e.stopPropagation()}
-                                                            className="no-drag absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover/locked:opacity-100 transition-opacity hover:bg-red-600 pointer-events-auto cursor-pointer z-50"
+                                                            className="no-drag absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-1.5 shadow-sm opacity-0 group-hover/sig:opacity-100 transition-opacity hover:bg-red-700 pointer-events-auto cursor-pointer z-50"
                                                         >
-                                                            <Trash2 className="w-3 h-3" />
+                                                            <X className="w-4 h-4" />
                                                         </button>
                                                     </div>
                                                 </Rnd>
-                                            );
-                                        } else {
-                                            return (
-                                                <div
-                                                    key={sig.id}
-                                                    style={{
-                                                        position: 'absolute',
-                                                        left: sig.x * scale,
-                                                        top: sig.y * scale,
-                                                        width: sig.width * scale,
-                                                        height: sig.height * scale,
-                                                        border: '2px solid transparent',
-                                                        zIndex: 50,
-                                                    }}
-                                                    className="group/locked pointer-events-none"
-                                                >
-                                                    <img
-                                                        src={sig.data}
-                                                        alt={`Signature by ${sig.name}`}
-                                                        className="w-full h-full object-contain pointer-events-none"
-                                                    />
-                                                    <div className="absolute -top-6 left-0 bg-gray-600 text-white text-xs px-2 py-0.5 rounded opacity-0 group-hover/locked:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                                        {sig.name} (Locked)
-                                                    </div>
-                                                </div>
-                                            );
-                                        }
-                                    })}
-
-                                    {/* New Signatures (Editable) */}
-                                    {newSignatures.filter(s => s.page === pageNumber).map((sig) => (
-                                        <Rnd
-                                            key={sig.id}
-                                            default={{
-                                                x: sig.x,
-                                                y: sig.y,
-                                                width: sig.width,
-                                                height: sig.height,
-                                            }}
-                                            bounds="parent"
-                                            cancel=".no-drag"
-                                            onDragStop={(e, d) => updateDraftSignature(sig.id, { x: d.x, y: d.y })}
-                                            onResizeStop={(e, direction, ref, delta, position) => {
-                                                updateDraftSignature(sig.id, {
-                                                    width: parseInt(ref.style.width),
-                                                    height: parseInt(ref.style.height),
-                                                    ...position,
-                                                });
-                                            }}
-                                            className="border-2 border-blue-500/50 hover:border-blue-600 group/sig z-50"
-                                        >
-                                            <div className="w-full h-full relative">
-                                                <img
-                                                    src={sig.data}
-                                                    alt={`Signature by ${sig.name}`}
-                                                    className="w-full h-full object-contain pointer-events-none"
-                                                />
-                                                {/* Improved Accessibility: Darker background, larger text, always visible or high contrast */}
-                                                <div className="absolute -top-8 left-0 bg-slate-900 text-white text-sm font-medium px-3 py-1 rounded shadow-md opacity-0 group-hover/sig:opacity-100 transition-opacity whitespace-nowrap z-50">
-                                                    {sig.name} (You)
-                                                </div>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        removeSignature(sig.id);
-                                                    }}
-                                                    onMouseDown={(e) => e.stopPropagation()}
-                                                    className="no-drag absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-1.5 shadow-sm opacity-0 group-hover/sig:opacity-100 transition-opacity hover:bg-red-700 pointer-events-auto cursor-pointer z-50"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </Rnd>
-                                    ))}
-                                </div>
-                            );
-                        })}
-                    </Document>
+                                            ))}
+                                        </div>
+                                    );
+                                })}
+                            </Document>
+                        </div>
+                    ))}
                 </div>
 
                 {/* History Sidebar */}
@@ -518,8 +589,8 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
                             {/* Document Created Event */}
                             <div className="relative pl-4 border-l-2 border-gray-200">
                                 <div className="absolute -left-[5px] top-0 w-2 h-2 rounded-full bg-gray-400" />
-                                <p className="text-sm font-medium text-gray-800">Document Uploaded</p>
-                                <p className="text-xs text-gray-500">{formatDate(document.created_at)}</p>
+                                <p className="text-sm font-medium text-gray-800">Documents Uploaded</p>
+                                <p className="text-xs text-gray-500">{formatDate(documents[0].created_at)}</p>
                             </div>
 
                             {/* Signatures List */}
