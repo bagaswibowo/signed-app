@@ -52,6 +52,7 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
     const [modifiedSignatureIds, setModifiedSignatureIds] = useState<Set<string>>(new Set());
     const [isChecklistMode, setIsChecklistMode] = useState(false);
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
+    const [uploadedSignatureImage, setUploadedSignatureImage] = useState<string | null>(null);
 
     const sigCanvas = useRef<SignatureCanvas>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -117,9 +118,24 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
     const handleZoomOut = () => setScale(prev => Math.max(prev - 0.1, 0.5));
 
     const handleCreateSignature = () => {
-        if (sigCanvas.current && signerName.trim()) {
-            const data = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
-            handleAddSignature(data);
+        if (uploadedSignatureImage && signerName.trim()) {
+            handleAddSignature(uploadedSignatureImage);
+        } else if (sigCanvas.current && signerName.trim()) {
+            // Only check canvas if no uploaded image
+            if (sigCanvas.current.isEmpty()) {
+                // If canvas is empty and no uploaded image, maybe alert? 
+                // But current logic allows empty canvas if name is present? 
+                // Actually original code checked sigCanvas.current (existence) but not isEmpty() explicitly in the if condition, 
+                // but getTrimmedCanvas() might return empty. 
+                // Let's stick to original logic: if canvas exists and name exists.
+                // But we should probably check if it's empty to avoid empty signatures.
+                // For now, mirroring original behavior but prioritizing upload.
+                const data = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+                handleAddSignature(data);
+            } else {
+                const data = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+                handleAddSignature(data);
+            }
         } else if (!signerName.trim()) {
             alert('Please enter your name');
         }
@@ -130,7 +146,7 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
             const reader = new FileReader();
             reader.onload = (ev) => {
                 if (ev.target?.result) {
-                    handleAddSignature(ev.target.result as string);
+                    setUploadedSignatureImage(ev.target.result as string);
                 }
             };
             reader.readAsDataURL(e.target.files[0]);
@@ -779,28 +795,58 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                     Draw Signature
                                 </label>
-                                <div className="border rounded-md overflow-hidden bg-gray-50 dark:bg-gray-100">
-                                    <SignatureCanvas
-                                        ref={sigCanvas}
-                                        canvasProps={{
-                                            className: 'w-full h-48 cursor-crosshair',
-                                            style: { width: '100%', height: '192px' }
-                                        }}
-                                        backgroundColor="rgba(0,0,0,0)"
-                                    />
+                                <div className="border rounded-md overflow-hidden bg-gray-50 dark:bg-gray-100 relative">
+                                    {uploadedSignatureImage ? (
+                                        <div className="w-full h-48 flex items-center justify-center bg-gray-100">
+                                            <img
+                                                src={uploadedSignatureImage}
+                                                alt="Signature Preview"
+                                                className="max-w-full max-h-full object-contain"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <SignatureCanvas
+                                            ref={sigCanvas}
+                                            canvasProps={{
+                                                className: 'w-full h-48 cursor-crosshair',
+                                                style: { width: '100%', height: '192px' }
+                                            }}
+                                            backgroundColor="rgba(0,0,0,0)"
+                                        />
+                                    )}
                                 </div>
                                 <button
-                                    onClick={() => sigCanvas.current?.clear()}
+                                    onClick={() => {
+                                        sigCanvas.current?.clear();
+                                        setUploadedSignatureImage(null);
+                                    }}
                                     className="text-sm text-red-600 hover:text-red-700 mt-1 dark:text-red-400"
                                 >
                                     Clear
                                 </button>
                             </div>
+
+                            <div className="flex items-center justify-between pt-4 border-t dark:border-gray-700">
+                                <span className="text-sm text-gray-500 dark:text-gray-400">Or upload image</span>
+                                <label className="cursor-pointer px-3 py-1.5 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-300 text-sm flex items-center transition-colors">
+                                    <UploadIcon className="w-4 h-4 mr-2" />
+                                    Upload Image
+                                    <input
+                                        type="file"
+                                        accept="image/png, image/jpeg, image/jpg"
+                                        className="hidden"
+                                        onChange={handleUploadSignature}
+                                    />
+                                </label>
+                            </div>
                         </div>
 
                         <div className="p-4 bg-gray-50 dark:bg-gray-900 flex justify-end gap-2">
                             <button
-                                onClick={() => setIsDrawing(false)}
+                                onClick={() => {
+                                    setIsDrawing(false);
+                                    setUploadedSignatureImage(null);
+                                }}
                                 className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md dark:text-gray-300 dark:hover:bg-gray-700"
                             >
                                 Cancel

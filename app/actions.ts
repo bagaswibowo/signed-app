@@ -71,8 +71,14 @@ export async function generateSignedPdf(documentId: string) {
         const pdfDoc = await PDFDocument.load(pdfBuffer);
 
         // 3. Embed signatures
+        // 3. Embed signatures
         for (const sig of signatures) {
-            const signatureImage = await pdfDoc.embedPng(sig.data);
+            let signatureImage;
+            if (sig.data.startsWith('data:image/jpeg') || sig.data.startsWith('data:image/jpg')) {
+                signatureImage = await pdfDoc.embedJpg(sig.data);
+            } else {
+                signatureImage = await pdfDoc.embedPng(sig.data);
+            }
             const pageIndex = sig.page - 1;
 
             if (pageIndex >= 0 && pageIndex < pdfDoc.getPageCount()) {
@@ -127,8 +133,14 @@ export async function generateSignedZip(documentIds: string[]) {
             const pdfDoc = await PDFDocument.load(pdfBuffer);
 
             // 3. Embed signatures
+            // 3. Embed signatures
             for (const sig of signatures) {
-                const signatureImage = await pdfDoc.embedPng(sig.data);
+                let signatureImage;
+                if (sig.data.startsWith('data:image/jpeg') || sig.data.startsWith('data:image/jpg')) {
+                    signatureImage = await pdfDoc.embedJpg(sig.data);
+                } else {
+                    signatureImage = await pdfDoc.embedPng(sig.data);
+                }
                 const pageIndex = sig.page - 1;
 
                 if (pageIndex >= 0 && pageIndex < pdfDoc.getPageCount()) {
