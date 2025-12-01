@@ -317,16 +317,7 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
                         Add Signature
                     </button>
 
-                    {newSignatures.length > 0 && (
-                        <button
-                            onClick={handleSaveSignatures}
-                            disabled={isSaving}
-                            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                        >
-                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                            Save Changes
-                        </button>
-                    )}
+
 
                     <button
                         onClick={handleDownloadPdf}
@@ -534,6 +525,19 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
                     </div>
                 )}
             </div> {/* Signature Modal */}
+
+            {/* Floating Save Button */}
+            {newSignatures.length > 0 && (
+                <button
+                    onClick={handleSaveSignatures}
+                    disabled={isSaving}
+                    className="fixed bottom-8 right-8 z-50 flex items-center px-6 py-3 bg-green-600 text-white rounded-full shadow-lg hover:bg-green-700 disabled:opacity-50 transition-all hover:scale-105"
+                >
+                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5 mr-2" />}
+                    Save Signature
+                </button>
+            )}
+
             {isDrawing && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                     <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
