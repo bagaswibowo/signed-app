@@ -520,7 +520,7 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
     return (
         <div className={cn("min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col", theme === 'dark' && 'dark')}>
             {/* Toolbar */}
-            <div className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b dark:border-gray-800 shadow-sm p-4 flex flex-wrap gap-4 justify-between items-center">
+            <div className="sticky top-0 z-[100] bg-white dark:bg-gray-900 border-b dark:border-gray-800 shadow-sm p-4 flex flex-wrap gap-4 justify-between items-center">
                 <div className="flex items-center gap-4">
                     <h1 className="font-semibold text-gray-700 dark:text-gray-200 hidden md:block">Sign Document</h1>
                     <button
