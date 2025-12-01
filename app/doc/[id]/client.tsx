@@ -45,6 +45,7 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
     const [copied, setCopied] = useState(false);
     const [signatureData, setSignatureData] = useState('');
     const [localSignatures, setLocalSignatures] = useState<Signature[]>(existingSignatures);
+    const [modifiedSignatureIds, setModifiedSignatureIds] = useState<Set<string>>(new Set());
 
     const sigCanvas = useRef<SignatureCanvas>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -125,7 +126,7 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
         // Don't clear signer name, useful for presence
     };
 
-    const updateSignature = (id: string, updates: Partial<Signature>) => {
+    const updateDraftSignature = (id: string, updates: Partial<Signature>) => {
         // Update draft signatures
         setNewSignatures(newSignatures.map(sig => sig.id === id ? { ...sig, ...updates } : sig));
     };
@@ -158,38 +159,57 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
     };
 
     const handleSaveSignatures = async () => {
-        if (newSignatures.length === 0) return;
+        if (newSignatures.length === 0 && modifiedSignatureIds.size === 0) return;
         setIsSaving(true);
 
         try {
-            // We need to calculate normalized coordinates for DB
-            // We need to calculate normalized coordinates for DB
-            const signaturesToSave = newSignatures.map(sig => {
-                const safeScale = scale || 1;
-                const x = Math.round((sig.x || 0) / safeScale);
-                const y = Math.round((sig.y || 0) / safeScale);
-                const width = Math.round((sig.width || 100) / safeScale);
-                const height = Math.round((sig.height || 50) / safeScale);
+            // 1. Save New Signatures
+            if (newSignatures.length > 0) {
+                // We need to calculate normalized coordinates for DB
+                const signaturesToSave = newSignatures.map(sig => {
+                    const safeScale = scale || 1;
+                    const x = Math.round((sig.x || 0) / safeScale);
+                    const y = Math.round((sig.y || 0) / safeScale);
+                    const width = Math.round((sig.width || 100) / safeScale);
+                    const height = Math.round((sig.height || 50) / safeScale);
 
-                return {
-                    ...sig,
-                    x: isNaN(x) ? 0 : x,
-                    y: isNaN(y) ? 0 : y,
-                    width: isNaN(width) ? 100 : width,
-                    height: isNaN(height) ? 50 : height,
-                    page: sig.page || 1
-                };
-            });
+                    return {
+                        ...sig,
+                        x: isNaN(x) ? 0 : x,
+                        y: isNaN(y) ? 0 : y,
+                        width: isNaN(width) ? 100 : width,
+                        height: isNaN(height) ? 50 : height,
+                        page: sig.page || 1
+                    };
+                });
 
-            const savedIds = await addSignatures({
-                documentId: document.id,
-                signatures: signaturesToSave
-            });
+                const savedIds = await addSignatures({
+                    documentId: document.id,
+                    signatures: signaturesToSave
+                });
 
-            // Update local storage with new IDs
-            const updatedMyIds = [...mySignatureIds, ...savedIds];
-            setMySignatureIds(updatedMyIds);
-            localStorage.setItem('my_signatures', JSON.stringify(updatedMyIds));
+                // Update local storage with new IDs
+                const updatedMyIds = [...mySignatureIds, ...savedIds];
+                setMySignatureIds(updatedMyIds);
+                localStorage.setItem('my_signatures', JSON.stringify(updatedMyIds));
+            }
+
+            // 2. Update Modified Signatures
+            if (modifiedSignatureIds.size > 0) {
+                const updatePromises = Array.from(modifiedSignatureIds).map(async (id) => {
+                    const sig = localSignatures.find(s => s.id === id);
+                    if (sig) {
+                        return updateSignature(id, {
+                            x: Math.round(sig.x || 0),
+                            y: Math.round(sig.y || 0),
+                            width: Math.round(sig.width || 100),
+                            height: Math.round(sig.height || 50),
+                            page: sig.page || 1
+                        });
+                    }
+                });
+                await Promise.all(updatePromises);
+            }
 
             alert('Signatures saved successfully!');
             window.location.reload();
@@ -228,20 +248,14 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
         }
     };
 
-    const handleUpdateSavedSignature = async (id: string, updates: any) => {
-        // Correct optimistic update:
+    const handleUpdateSavedSignature = (id: string, updates: any) => {
+        // Update local state only
         setLocalSignatures(localSignatures.map(sig =>
             sig.id === id ? { ...sig, ...updates } : sig
         ));
 
-        try {
-            await updateSignature(id, updates);
-            // No reload needed!
-        } catch (error) {
-            console.error(error);
-            // Revert or alert
-            alert('Failed to update signature position');
-        }
+        // Mark as modified
+        setModifiedSignatureIds(prev => new Set(prev).add(id));
     };
 
     const handleDeleteDocument = async () => {
@@ -452,9 +466,9 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
                                             }}
                                             bounds="parent"
                                             cancel=".no-drag"
-                                            onDragStop={(e, d) => updateSignature(sig.id, { x: d.x, y: d.y })}
+                                            onDragStop={(e, d) => updateDraftSignature(sig.id, { x: d.x, y: d.y })}
                                             onResizeStop={(e, direction, ref, delta, position) => {
-                                                updateSignature(sig.id, {
+                                                updateDraftSignature(sig.id, {
                                                     width: parseInt(ref.style.width),
                                                     height: parseInt(ref.style.height),
                                                     ...position,
@@ -527,7 +541,7 @@ export default function ClientSigningPage({ document, existingSignatures }: Clie
             </div> {/* Signature Modal */}
 
             {/* Floating Save Button */}
-            {newSignatures.length > 0 && (
+            {(newSignatures.length > 0 || modifiedSignatureIds.size > 0) && (
                 <button
                     onClick={handleSaveSignatures}
                     disabled={isSaving}

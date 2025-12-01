@@ -126,7 +126,8 @@ export async function updateSignature(signatureId: string, updates: { x: number;
         return { success: true };
     } catch (error) {
         console.error('Error updating signature:', error);
-        throw new Error('Failed to update signature');
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        throw new Error(`Failed to update signature: ${errorMessage}`);
     }
 }
 
