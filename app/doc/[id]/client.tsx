@@ -75,6 +75,7 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [uploadedSignatureImage, setUploadedSignatureImage] = useState<string | null>(null);
     const [nameError, setNameError] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
 
     const sigCanvas = useRef<SignatureCanvas>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -397,6 +398,7 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
 
     const handleAddDocument = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
+            setIsUploading(true);
             const file = e.target.files[0];
             const formData = new FormData();
             formData.append('file', file);
@@ -413,12 +415,14 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
             } catch (error) {
                 console.error('Failed to add document:', error);
                 alert('Failed to add document');
+                setIsUploading(false);
             }
         }
     };
 
     const handleReplaceDocument = async (e: React.ChangeEvent<HTMLInputElement>, docId: string, oldUrl: string) => {
         if (e.target.files && e.target.files[0]) {
+            setIsUploading(true);
             const file = e.target.files[0];
             const formData = new FormData();
             formData.append('file', file);
@@ -435,7 +439,7 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
                 // Let's assume we can use a client-side upload or a specific server action.
                 // Since I can't easily add a new generic upload action without modifying actions.ts again (which I did for updateDocumentUrl but not uploadFile),
                 // I will use uploadDocument to get the file up, then update the *current* document's URL with the *new* document's URL, 
-                // and then delete the *new* document record (but keep the file). 
+                // and then delete the *new* document record (but keep the file!). 
                 // This is a bit hacky but works with existing tools.
                 // ACTUALLY, I can just import put from vercel/blob in a server action.
                 // I'll stick to the plan: I added updateDocumentUrl. I need to upload the file first.
@@ -473,6 +477,7 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
             } catch (error) {
                 console.error('Failed to replace document:', error);
                 alert('Failed to replace document');
+                setIsUploading(false);
             }
         }
     };
@@ -1023,6 +1028,15 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
                     </div>
                 )
             }
-        </div >
+            {/* Uploading Overlay */}
+            {isUploading && (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl flex flex-col items-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-4" />
+                        <p className="text-gray-700 dark:text-gray-200 font-medium">Uploading Document...</p>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
