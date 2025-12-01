@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Rnd } from 'react-rnd';
 import SignatureCanvas from 'react-signature-canvas';
-import { Loader2, PenTool, Save, Trash2, Upload as UploadIcon, X, Plus, Download, Share2, History, Check } from 'lucide-react';
+import { Loader2, PenTool, Save, Trash2, Upload as UploadIcon, X, Plus, Download, Share2, History, Check, ZoomIn, ZoomOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { addSignatures, generateSignedPdf, deleteSignature, updateSignature, deleteDocument, generateSignedZip } from '@/app/actions';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -109,6 +109,9 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
     function onDocumentLoadSuccess(docId: string, { numPages }: { numPages: number }) {
         setNumPagesMap(prev => ({ ...prev, [docId]: numPages }));
     }
+
+    const handleZoomIn = () => setScale(prev => Math.min(prev + 0.1, 2.0));
+    const handleZoomOut = () => setScale(prev => Math.max(prev - 0.1, 0.5));
 
     const handleCreateSignature = () => {
         if (sigCanvas.current && signerName.trim()) {
@@ -377,6 +380,26 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
                 </div>
 
                 <div className="flex gap-2">
+                    <div className="flex items-center bg-gray-100 rounded-md mr-2">
+                        <button
+                            onClick={handleZoomOut}
+                            className="p-2 hover:bg-gray-200 rounded-l-md text-gray-600"
+                            title="Zoom Out"
+                        >
+                            <ZoomOut className="w-4 h-4" />
+                        </button>
+                        <span className="text-xs font-medium w-12 text-center text-gray-600">
+                            {Math.round(scale * 100)}%
+                        </span>
+                        <button
+                            onClick={handleZoomIn}
+                            className="p-2 hover:bg-gray-200 rounded-r-md text-gray-600"
+                            title="Zoom In"
+                        >
+                            <ZoomIn className="w-4 h-4" />
+                        </button>
+                    </div>
+
                     <button
                         onClick={() => {
                             setIsDrawing(true);
