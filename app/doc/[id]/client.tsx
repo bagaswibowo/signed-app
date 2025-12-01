@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Rnd } from 'react-rnd';
 import SignatureCanvas from 'react-signature-canvas';
-import { Loader2, PenTool, Save, Trash2, Upload as UploadIcon, X, Plus, Download, Share2, History, Check, ZoomIn, ZoomOut } from 'lucide-react';
+import { Loader2, PenTool, Save, Trash2, Upload as UploadIcon, X, Plus, Download, Share2, History, Check, ZoomIn, ZoomOut, CheckSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { addSignatures, generateSignedPdf, deleteSignature, updateSignature, deleteDocument, generateSignedZip } from '@/app/actions';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -30,6 +30,7 @@ interface Signature {
     created_at: string;
     scale: number; // Scale at which it was created
     document_id?: string; // Optional for new signatures, present for existing
+    documentId?: string; // For new signatures
 }
 
 export default function ClientSigningPage({ documents, existingSignatures }: ClientSigningPageProps) {
@@ -156,6 +157,41 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
         setIsDrawing(false);
         setSignatureData('');
         // Don't clear signer name, useful for presence
+    };
+
+    const handleAddCheckmark = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 100;
+        canvas.height = 100;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+            // Draw checkmark
+            ctx.font = 'bold 80px sans-serif';
+            ctx.fillStyle = 'black';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('✓', 50, 50);
+
+            const dataUrl = canvas.toDataURL('image/png');
+
+            const newCheckmark: Signature = {
+                id: crypto.randomUUID(),
+                name: 'Checkmark',
+                data: dataUrl,
+                x: 100,
+                y: 100,
+                width: 50,
+                height: 50,
+                page: activePage,
+                documentId: activeDocId,
+                scale: scale,
+                created_at: new Date().toISOString()
+            };
+            setNewSignatures([...newSignatures, newCheckmark]);
+
+            // Default to first doc if none active
+            if (!activeDocId) setActiveDocId(documents[0].id);
+        }
     };
 
     const updateDraftSignature = (id: string, updates: Partial<Signature>) => {
@@ -410,6 +446,14 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
                     >
                         <Plus className="w-4 h-4 mr-2" />
                         Add Signature
+                    </button>
+
+                    <button
+                        onClick={handleAddCheckmark}
+                        className="flex items-center px-4 py-2 bg-emerald-600 text-white rounded-md hover:bg-emerald-700"
+                    >
+                        <CheckSquare className="w-4 h-4 mr-2" />
+                        Add Checklist
                     </button>
 
 
