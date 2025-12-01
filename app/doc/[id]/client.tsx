@@ -407,9 +407,9 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
                 const { uploadDocument } = await import('@/app/actions');
                 const result = await uploadDocument(formData);
                 if (result.success && result.documentId) {
-                    // Append new ID to URL
+                    // Prepend new ID to URL (so it appears first)
                     const currentIds = documents.map(d => d.id);
-                    const newIds = [...currentIds, result.documentId].join(',');
+                    const newIds = [result.documentId, ...currentIds].join(',');
                     window.location.href = `/doc/${newIds}`;
                 }
             } catch (error) {

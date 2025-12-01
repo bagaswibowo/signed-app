@@ -25,10 +25,15 @@ export default async function DocPage({ params }: { params: Promise<{ id: string
     notFound();
   }
 
+  // Sort documents to match the order of docIds
+  const sortedDocuments = docIds
+    .map(id => documents.find(doc => doc.id === id))
+    .filter((doc): doc is typeof documents[0] => Boolean(doc));
+
   // Fetch all signatures for these documents
   const { rows: signatures } = await sql`
     SELECT * FROM signatures WHERE document_id = ANY(${docIds as any})
   `;
 
-  return <SigningPageWrapper documents={documents} existingSignatures={signatures} />;
+  return <SigningPageWrapper documents={sortedDocuments} existingSignatures={signatures} />;
 }
