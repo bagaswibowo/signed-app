@@ -257,3 +257,25 @@ export async function uploadDocument(formData: FormData) {
     // 4. Return ID for client-side redirection
     return { success: true, documentId };
 }
+
+export async function updateDocumentUrl(documentId: string, newUrl: string, oldUrl?: string) {
+    try {
+        // 1. Update Postgres
+        await sql`
+      UPDATE documents
+      SET url = ${newUrl}
+      WHERE id = ${documentId}
+    `;
+
+        // 2. Delete old file from Blob if provided
+        if (oldUrl) {
+            await del(oldUrl);
+        }
+
+        revalidatePath(`/doc/${documentId}`);
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating document URL:', error);
+        throw new Error('Failed to update document URL');
+    }
+}
