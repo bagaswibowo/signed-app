@@ -642,102 +642,109 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
     return (
         <div className={cn("min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col", theme === 'dark' && 'dark')}>
             {/* Toolbar */}
-            <div className="sticky top-0 z-[100] bg-white dark:bg-gray-900 border-b dark:border-gray-800 shadow-sm p-4 flex flex-wrap gap-4 justify-between items-center">
-                <div className="flex items-center gap-4">
-                    <h1 className="font-semibold text-gray-700 dark:text-gray-200 hidden md:block">Sign Document</h1>
-                    <button
-                        onClick={handleShare}
-                        className="flex items-center px-3 py-1.5 text-sm border rounded-full hover:bg-gray-50 text-gray-600 transition-colors dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
-                    >
-                        {copied ? <Check className="w-4 h-4 mr-1 text-green-500" /> : <Share2 className="w-4 h-4 mr-1" />}
-                        {copied ? 'Copied!' : 'Share Link'}
-                    </button>
-
-                    <button
-                        onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                        className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors"
-                        title="Toggle Theme"
-                    >
-                        {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
-                    </button>
-
-                    <button
-                        onClick={() => setShowHistory(!showHistory)}
-                        className={cn(
-                            "flex items-center px-3 py-1.5 text-sm border rounded-full transition-colors",
-                            showHistory ? "bg-blue-50 border-blue-200 text-blue-700" : "hover:bg-gray-50 text-gray-600"
-                        )}
-                    >
-                        <History className="w-4 h-4 mr-1" />
-                        History
-                    </button>
-                    <button
-                        onClick={() => document.getElementById('add-doc-input')?.click()}
-                        className="flex items-center px-3 py-1.5 text-sm border border-blue-200 text-blue-600 rounded-full hover:bg-blue-50 transition-colors"
-                    >
-                        <UploadIcon className="w-4 h-4 mr-1" />
-                        Add File
-                    </button>
-                    <input
-                        id="add-doc-input"
-                        type="file"
-                        accept="application/pdf"
-                        className="hidden"
-                        onChange={handleAddDocument}
-                    />
+            <div className="sticky top-0 z-[100] flex flex-col shadow-sm">
+                {/* Warning Banner */}
+                <div className="bg-red-600 text-white text-center px-4 py-2 text-sm font-medium">
+                    PERINGATAN: File akan otomatis terhapus ketika "Download PDF" di klik jadi pastikan semua ttd sudah dibubuhkan
                 </div>
 
-                <div className="flex gap-2">
-                    <div className="flex items-center bg-gray-100 rounded-md mr-2">
+                <div className="bg-white dark:bg-gray-900 border-b dark:border-gray-800 p-4 flex flex-wrap gap-4 justify-between items-center">
+                    <div className="flex items-center gap-4">
+                        <h1 className="font-semibold text-gray-700 dark:text-gray-200 hidden md:block">Sign Document</h1>
                         <button
-                            onClick={handleZoomOut}
-                            className="p-2 hover:bg-gray-200 rounded-l-md text-gray-600"
-                            title="Zoom Out"
+                            onClick={handleShare}
+                            className="flex items-center px-3 py-1.5 text-sm border rounded-full hover:bg-gray-50 text-gray-600 transition-colors dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                         >
-                            <ZoomOut className="w-4 h-4" />
+                            {copied ? <Check className="w-4 h-4 mr-1 text-green-500" /> : <Share2 className="w-4 h-4 mr-1" />}
+                            {copied ? 'Copied!' : 'Share Link'}
                         </button>
-                        <span className="text-xs font-medium w-12 text-center text-gray-600">
-                            {Math.round(scale * 100)}%
-                        </span>
+
                         <button
-                            onClick={handleZoomIn}
-                            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-r-md text-gray-600 dark:text-gray-300"
-                            title="Zoom In"
+                            onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors"
+                            title="Toggle Theme"
                         >
-                            <ZoomIn className="w-4 h-4" />
+                            {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
                         </button>
+
+                        <button
+                            onClick={() => setShowHistory(!showHistory)}
+                            className={cn(
+                                "flex items-center px-3 py-1.5 text-sm border rounded-full transition-colors",
+                                showHistory ? "bg-blue-50 border-blue-200 text-blue-700" : "hover:bg-gray-50 text-gray-600"
+                            )}
+                        >
+                            <History className="w-4 h-4 mr-1" />
+                            History
+                        </button>
+                        <button
+                            onClick={() => document.getElementById('add-doc-input')?.click()}
+                            className="flex items-center px-3 py-1.5 text-sm border border-blue-200 text-blue-600 rounded-full hover:bg-blue-50 transition-colors"
+                        >
+                            <UploadIcon className="w-4 h-4 mr-1" />
+                            Add File
+                        </button>
+                        <input
+                            id="add-doc-input"
+                            type="file"
+                            accept="application/pdf"
+                            className="hidden"
+                            onChange={handleAddDocument}
+                        />
                     </div>
 
-                    {/* Save Button Moved Here */}
-                    {/* Save Button */}
-                    <button
-                        onClick={handleSaveSignatures}
-                        disabled={isSaving || !(newSignatures.length > 0 || modifiedSignatureIds.size > 0)}
-                        className={cn(
-                            "flex items-center px-4 py-2 rounded-md transition-all duration-200",
-                            (newSignatures.length > 0 || modifiedSignatureIds.size > 0)
-                                ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
-                                : "bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400"
-                        )}
-                    >
-                        {isSaving ? (
-                            <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                        ) : (newSignatures.length > 0 || modifiedSignatureIds.size > 0) ? (
-                            <Save className="w-4 h-4 mr-2" />
-                        ) : (
-                            <Check className="w-4 h-4 mr-2" />
-                        )}
-                        {(newSignatures.length > 0 || modifiedSignatureIds.size > 0) ? 'Save Changes' : 'Saved'}
-                    </button>
+                    <div className="flex gap-2">
+                        <div className="flex items-center bg-gray-100 rounded-md mr-2">
+                            <button
+                                onClick={handleZoomOut}
+                                className="p-2 hover:bg-gray-200 rounded-l-md text-gray-600"
+                                title="Zoom Out"
+                            >
+                                <ZoomOut className="w-4 h-4" />
+                            </button>
+                            <span className="text-xs font-medium w-12 text-center text-gray-600">
+                                {Math.round(scale * 100)}%
+                            </span>
+                            <button
+                                onClick={handleZoomIn}
+                                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-r-md text-gray-600 dark:text-gray-300"
+                                title="Zoom In"
+                            >
+                                <ZoomIn className="w-4 h-4" />
+                            </button>
+                        </div>
 
-                    <button
-                        onClick={handleDownloadPdf}
-                        disabled={isGenerating || newSignatures.length > 0 || modifiedSignatureIds.size > 0}
-                        className="flex items-center px-4 py-2 bg-gray-800 dark:bg-gray-700 text-white rounded-md hover:bg-gray-900 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                        {documents.length > 1 ? 'Download All' : 'Download PDF'}
-                    </button>
+                        {/* Save Button Moved Here */}
+                        {/* Save Button */}
+                        <button
+                            onClick={handleSaveSignatures}
+                            disabled={isSaving || !(newSignatures.length > 0 || modifiedSignatureIds.size > 0)}
+                            className={cn(
+                                "flex items-center px-4 py-2 rounded-md transition-all duration-200",
+                                (newSignatures.length > 0 || modifiedSignatureIds.size > 0)
+                                    ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+                                    : "bg-gray-100 text-gray-500 border border-gray-200 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400"
+                            )}
+                        >
+                            {isSaving ? (
+                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                            ) : (newSignatures.length > 0 || modifiedSignatureIds.size > 0) ? (
+                                <Save className="w-4 h-4 mr-2" />
+                            ) : (
+                                <Check className="w-4 h-4 mr-2" />
+                            )}
+                            {(newSignatures.length > 0 || modifiedSignatureIds.size > 0) ? 'Save Changes' : 'Saved'}
+                        </button>
+
+                        <button
+                            onClick={handleDownloadPdf}
+                            disabled={isGenerating || newSignatures.length > 0 || modifiedSignatureIds.size > 0}
+                            className="flex items-center px-4 py-2 bg-gray-800 dark:bg-gray-700 text-white rounded-md hover:bg-gray-900 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
+                            {documents.length > 1 ? 'Download All' : 'Download PDF'}
+                        </button>
+                    </div>
                 </div>
             </div>
 
