@@ -645,7 +645,7 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
             <div className="sticky top-0 z-[100] flex flex-col shadow-sm">
                 {/* Warning Banner */}
                 <div className="bg-red-600 text-white text-center px-4 py-2 text-sm font-medium">
-                    PERINGATAN: File akan otomatis terhapus ketika "Download PDF" di klik jadi pastikan semua ttd sudah dibubuhkan
+                    PERINGATAN: File akan otomatis terhapus ketika "Download All" di klik jadi pastikan semua ttd sudah dibubuhkan
                 </div>
 
                 <div className="bg-white dark:bg-gray-900 border-b dark:border-gray-800 p-4 flex flex-wrap gap-4 justify-between items-center">
