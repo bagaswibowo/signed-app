@@ -24,7 +24,8 @@ import {
     PenTool, // Kept from original, as it's likely used for drawing
     Plus, // Kept from original, as it's likely used for adding signatures
     Share2, // Kept from original, as it's likely used for sharing
-    History // Kept from original, as it's likely used for history
+    History, // Kept from original, as it's likely used for history
+    Copy // Added for duplication
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { addSignatures, generateSignedPdf, deleteSignature, updateSignature, deleteDocument, generateSignedZip } from '@/app/actions';
@@ -76,6 +77,10 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
     const [uploadedSignatureImage, setUploadedSignatureImage] = useState<string | null>(null);
     const [nameError, setNameError] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+
+    // New state for duplication
+    const [selectedSignatureId, setSelectedSignatureId] = useState<string | null>(null);
+    const [clipboardSignature, setClipboardSignature] = useState<Signature | null>(null);
 
     const sigCanvas = useRef<SignatureCanvas>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -522,6 +527,118 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
         new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime()
     );
 
+    // --- Duplication Logic ---
+
+    const handleDuplicate = (id: string) => {
+        // Find in newSignatures or localSignatures
+        const sigToDuplicate = newSignatures.find(s => s.id === id) || localSignatures.find(s => s.id === id);
+
+        if (sigToDuplicate) {
+            const newId = crypto.randomUUID();
+            const offset = 20;
+
+            const duplicatedSig: Signature = {
+                ...sigToDuplicate,
+                id: newId,
+                x: sigToDuplicate.x + offset,
+                y: sigToDuplicate.y + offset,
+                created_at: new Date().toISOString(),
+                // If it was an existing signature, we treat the duplicate as a NEW signature
+                // so it can be moved freely until saved.
+                // We remove document_id to ensure it's treated as new if it was from DB
+                document_id: undefined,
+                documentId: sigToDuplicate.documentId || sigToDuplicate.document_id || activeDocId
+            };
+
+            setNewSignatures(prev => [...prev, duplicatedSig]);
+            setSelectedSignatureId(newId); // Select the new one
+        }
+    };
+
+    const handleCopy = () => {
+        if (selectedSignatureId) {
+            const sigToCopy = newSignatures.find(s => s.id === selectedSignatureId) || localSignatures.find(s => s.id === selectedSignatureId);
+            if (sigToCopy) {
+                setClipboardSignature(sigToCopy);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1000);
+            }
+        }
+    };
+
+    const handlePaste = () => {
+        if (clipboardSignature) {
+            const newId = crypto.randomUUID();
+            const offset = 20;
+
+            // Determine page: paste on active page
+            // Determine position: center of screen or offset from original?
+            // Let's offset from original for now, but ensure it's on active page.
+
+            const pastedSig: Signature = {
+                ...clipboardSignature,
+                id: newId,
+                x: clipboardSignature.x + offset,
+                y: clipboardSignature.y + offset,
+                page: activePage, // Paste on current page
+                documentId: activeDocId, // Paste on current doc
+                document_id: undefined,
+                created_at: new Date().toISOString()
+            };
+
+            setNewSignatures(prev => [...prev, pastedSig]);
+            setSelectedSignatureId(newId);
+        }
+    };
+
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if input is active
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 'd' || e.key === 'D') {
+                    e.preventDefault();
+                    if (selectedSignatureId) {
+                        handleDuplicate(selectedSignatureId);
+                    }
+                } else if (e.key === 'c' || e.key === 'C') {
+                    // Copy
+                    if (selectedSignatureId) {
+                        e.preventDefault();
+                        handleCopy();
+                    }
+                } else if (e.key === 'v' || e.key === 'V') {
+                    // Paste
+                    if (clipboardSignature) {
+                        e.preventDefault();
+                        handlePaste();
+                    }
+                }
+            }
+
+            // Delete shortcut
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selectedSignatureId) {
+                    // Check if it's new or existing
+                    if (newSignatures.some(s => s.id === selectedSignatureId)) {
+                        removeSignature(selectedSignatureId);
+                        setSelectedSignatureId(null);
+                    } else if (localSignatures.some(s => s.id === selectedSignatureId)) {
+                        // For existing, we might want to confirm? Or just call the remove function
+                        // The existing remove function has a confirm dialog.
+                        // Let's trigger it.
+                        removeExistingSignature(selectedSignatureId);
+                        setSelectedSignatureId(null);
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedSignatureId, clipboardSignature, newSignatures, localSignatures, activePage, activeDocId]);
     return (
         <div className={cn("min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col", theme === 'dark' && 'dark')}>
             {/* Toolbar */}
@@ -703,6 +820,7 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
                                             {/* Existing Signatures */}
                                             {localSignatures.filter(s => s.document_id === doc.id && s.page === pageNumber).map((sig) => {
                                                 const isMine = mySignatureIds.includes(sig.id);
+                                                const isSelected = selectedSignatureId === sig.id;
 
                                                 if (isMine) {
                                                     return (
@@ -718,6 +836,10 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
                                                             }}
                                                             bounds="parent"
                                                             cancel=".no-drag"
+                                                            onClick={(e: React.MouseEvent) => {
+                                                                e.stopPropagation();
+                                                                setSelectedSignatureId(sig.id);
+                                                            }}
                                                             onDragStop={(e, d) => {
                                                                 const newX = d.x / scale;
                                                                 const newY = d.y / scale;
@@ -736,7 +858,10 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
                                                                     y: newY,
                                                                 });
                                                             }}
-                                                            className="border-2 border-blue-500/50 hover:border-blue-600 group/locked z-50"
+                                                            className={cn(
+                                                                "border-2 group/locked z-50",
+                                                                isSelected ? "border-blue-600 ring-2 ring-blue-400 ring-offset-2" : "border-blue-500/50 hover:border-blue-600"
+                                                            )}
                                                         >
                                                             <div className="w-full h-full relative">
                                                                 <img
@@ -757,6 +882,18 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
                                                                     className="no-drag absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 pointer-events-auto cursor-pointer z-50"
                                                                 >
                                                                     <Trash2 className="w-3 h-3" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        e.preventDefault();
+                                                                        handleDuplicate(sig.id);
+                                                                    }}
+                                                                    onMouseDown={(e) => e.stopPropagation()}
+                                                                    className="no-drag absolute -bottom-2 -right-2 bg-indigo-500 text-white rounded-full p-1 hover:bg-indigo-600 pointer-events-auto cursor-pointer z-50"
+                                                                    title="Duplicate"
+                                                                >
+                                                                    <Copy className="w-3 h-3" />
                                                                 </button>
                                                             </div>
                                                         </Rnd>
@@ -790,53 +927,75 @@ export default function ClientSigningPage({ documents, existingSignatures }: Cli
                                             })}
 
                                             {/* New Signatures (Editable) */}
-                                            {newSignatures.filter(s => ((s as any).documentId || documents[0].id) === doc.id && s.page === pageNumber).map((sig) => (
-                                                <Rnd
-                                                    key={sig.id}
-                                                    position={{
-                                                        x: sig.x * scale,
-                                                        y: sig.y * scale,
-                                                    }}
-                                                    size={{
-                                                        width: sig.width * scale,
-                                                        height: sig.height * scale,
-                                                    }}
-                                                    bounds="parent"
-                                                    cancel=".no-drag"
-                                                    onDragStop={(e, d) => updateDraftSignature(sig.id, { x: d.x / scale, y: d.y / scale })}
-                                                    onResizeStop={(e, direction, ref, delta, position) => {
-                                                        updateDraftSignature(sig.id, {
-                                                            width: parseInt(ref.style.width) / scale,
-                                                            height: parseInt(ref.style.height) / scale,
-                                                            x: position.x / scale,
-                                                            y: position.y / scale,
-                                                        });
-                                                    }}
-                                                    className="border-2 border-blue-500/50 hover:border-blue-600 group/sig z-50"
-                                                >
-                                                    <div className="w-full h-full relative">
-                                                        <img
-                                                            src={sig.data}
-                                                            alt={`Signature by ${sig.name}`}
-                                                            className="w-full h-full object-contain pointer-events-none"
-                                                        />
-                                                        {/* Improved Accessibility: Darker background, larger text, always visible or high contrast */}
-                                                        <div className="absolute -top-8 left-0 bg-slate-900 text-white text-sm font-medium px-3 py-1 rounded shadow-md opacity-0 group-hover/sig:opacity-100 transition-opacity whitespace-nowrap z-50">
-                                                            {sig.name} (You)
+                                            {newSignatures.filter(s => ((s as any).documentId || documents[0].id) === doc.id && s.page === pageNumber).map((sig) => {
+                                                const isSelected = selectedSignatureId === sig.id;
+                                                return (
+                                                    <Rnd
+                                                        key={sig.id}
+                                                        position={{
+                                                            x: sig.x * scale,
+                                                            y: sig.y * scale,
+                                                        }}
+                                                        size={{
+                                                            width: sig.width * scale,
+                                                            height: sig.height * scale,
+                                                        }}
+                                                        bounds="parent"
+                                                        cancel=".no-drag"
+                                                        onClick={(e: React.MouseEvent) => {
+                                                            e.stopPropagation();
+                                                            setSelectedSignatureId(sig.id);
+                                                        }}
+                                                        onDragStop={(e, d) => updateDraftSignature(sig.id, { x: d.x / scale, y: d.y / scale })}
+                                                        onResizeStop={(e, direction, ref, delta, position) => {
+                                                            updateDraftSignature(sig.id, {
+                                                                width: parseInt(ref.style.width) / scale,
+                                                                height: parseInt(ref.style.height) / scale,
+                                                                x: position.x / scale,
+                                                                y: position.y / scale,
+                                                            });
+                                                        }}
+                                                        className={cn(
+                                                            "border-2 group/sig z-50",
+                                                            isSelected ? "border-blue-600 ring-2 ring-blue-400 ring-offset-2" : "border-blue-500/50 hover:border-blue-600"
+                                                        )}
+                                                    >
+                                                        <div className="w-full h-full relative">
+                                                            <img
+                                                                src={sig.data}
+                                                                alt={`Signature by ${sig.name}`}
+                                                                className="w-full h-full object-contain pointer-events-none"
+                                                            />
+                                                            {/* Improved Accessibility: Darker background, larger text, always visible or high contrast */}
+                                                            <div className="absolute -top-8 left-0 bg-slate-900 text-white text-sm font-medium px-3 py-1 rounded shadow-md opacity-0 group-hover/sig:opacity-100 transition-opacity whitespace-nowrap z-50">
+                                                                {sig.name} (You)
+                                                            </div>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    removeSignature(sig.id);
+                                                                }}
+                                                                onMouseDown={(e) => e.stopPropagation()}
+                                                                className="no-drag absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-1.5 shadow-sm hover:bg-red-700 pointer-events-auto cursor-pointer z-50"
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    e.preventDefault();
+                                                                    handleDuplicate(sig.id);
+                                                                }}
+                                                                onMouseDown={(e) => e.stopPropagation()}
+                                                                className="no-drag absolute -bottom-3 -right-3 bg-indigo-600 text-white rounded-full p-1.5 shadow-sm hover:bg-indigo-700 pointer-events-auto cursor-pointer z-50"
+                                                                title="Duplicate"
+                                                            >
+                                                                <Copy className="w-4 h-4" />
+                                                            </button>
                                                         </div>
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                removeSignature(sig.id);
-                                                            }}
-                                                            onMouseDown={(e) => e.stopPropagation()}
-                                                            className="no-drag absolute -top-3 -right-3 bg-red-600 text-white rounded-full p-1.5 shadow-sm hover:bg-red-700 pointer-events-auto cursor-pointer z-50"
-                                                        >
-                                                            <X className="w-4 h-4" />
-                                                        </button>
-                                                    </div>
-                                                </Rnd>
-                                            ))}
+                                                    </Rnd>
+                                                )
+                                            })}
                                         </div>
                                     );
                                 })}
