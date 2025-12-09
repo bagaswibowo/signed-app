@@ -13,6 +13,7 @@ import {
     Download,
     Trash2,
     Settings,
+    AlertTriangle,
     CalendarClock,
     Type,
     CheckSquare,
@@ -61,6 +62,7 @@ interface ClientSigningPageProps {
         email: string;
         token: string;
     };
+    isOwner?: boolean;
 }
 
 // Annotation Types
@@ -95,7 +97,7 @@ interface Signature {
     style?: AnnotationStyle;
 }
 
-export default function ClientSigningPage({ documents, existingSignatures, signer }: ClientSigningPageProps) {
+export default function ClientSigningPage({ documents, existingSignatures, signer, isOwner: initialIsOwner = false }: ClientSigningPageProps) {
     // Map of docId -> numPages
     const [numPagesMap, setNumPagesMap] = useState<Record<string, number>>({});
     const [localDocuments, setLocalDocuments] = useState<any[]>(documents); // Initialize with prop
@@ -125,7 +127,9 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
     const [copied, setCopied] = useState(false);
     const [signatureData, setSignatureData] = useState('');
     const [localSignatures, setLocalSignatures] = useState<Signature[]>(existingSignatures);
-    const [isOwner, setIsOwner] = useState(false);
+
+    // Initialize isOwner from prop, fallback to false (localStorage check will run in useEffect)
+    const [isOwner, setIsOwner] = useState(initialIsOwner);
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [settingsStart, setSettingsStart] = useState('');
     const [settingsEnd, setSettingsEnd] = useState('');
@@ -234,6 +238,12 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
     useEffect(() => {
         // Check for owner access
         const checkOwnerAccess = () => {
+            // Priority: Prop > LocalStorage
+            if (initialIsOwner) {
+                setIsOwner(true);
+                return true;
+            }
+
             const hasAccess = localDocuments.some(doc => {
                 const token = localStorage.getItem(`doc_owner_${doc.id}`);
                 console.log(`[Permission Check] Doc ID: ${doc.id}, Token found: ${!!token}`);
@@ -276,23 +286,23 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
     }, [localDocuments]);
 
     const handleSettingsSave = async () => {
+        if (!documents[0]?.id) return;
+
         setSettingsLoading(true);
         try {
-            // Apply to all docs for now (or simplified logic)
-            // Ideally we iterate or pick one. Let's update the active doc or all.
-            for (const doc of localDocuments) {
-                const token = localStorage.getItem(`doc_owner_${doc.id}`);
-                if (token) {
-                    await updateDocumentSettings(doc.id, token, {
-                        startsAt: settingsStart ? new Date(settingsStart).toISOString() : undefined,
-                        expiresAt: settingsEnd ? new Date(settingsEnd).toISOString() : undefined
-                    });
-                }
-            }
-            alert('Settings updated successfully!');
+            const { updateDocumentSettings } = await import('@/app/actions');
+
+            // We rely on the cookie set during upload, so we don't need to pass the token manually
+            // validation happens server-side via cookies
+            await updateDocumentSettings(documents[0].id, {
+                expiresAt: settingsEnd ? new Date(settingsEnd).toISOString() : undefined
+            });
+
+            alert('Settings saved successfully!');
             setShowSettingsModal(false);
-        } catch (e) {
-            alert('Failed to update settings. ' + (e instanceof Error ? e.message : ''));
+        } catch (error) {
+            console.error('Failed to save settings:', error);
+            alert('Failed to save settings. You may not be the owner.');
         } finally {
             setSettingsLoading(false);
         }
@@ -1989,7 +1999,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     />
                                     <button
                                         onClick={handleShare}
-                                        className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"
+                                        className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md transition-colors dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
                                         title="Copy Link"
                                     >
                                         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
@@ -2006,17 +2016,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                         <Settings className="w-4 h-4" />
                                         Access Settings
                                     </h3>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                            Start Time (Active From)
-                                        </label>
-                                        <input
-                                            type="datetime-local"
-                                            value={settingsStart}
-                                            onChange={(e) => setSettingsStart(e.target.value)}
-                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700"
-                                        />
-                                    </div>
+
 
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -2026,15 +2026,38 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                             type="datetime-local"
                                             value={settingsEnd}
                                             onChange={(e) => setSettingsEnd(e.target.value)}
-                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700"
+                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
                                         />
                                     </div>
 
-                                    <div className="flex justify-end pt-2">
+                                    <div className="flex justify-end pt-2 gap-2">
+                                        <button
+                                            onClick={async () => {
+                                                if (!confirm('Are you sure? This will invalidate the current link instantly and generate a new one. Everyone using the old link will lose access.')) return;
+
+                                                setSettingsLoading(true);
+                                                try {
+                                                    const { regenerateDocumentLink } = await import('@/app/actions');
+                                                    const res = await regenerateDocumentLink(documents[0].id);
+                                                    if (res.newDocumentId) {
+                                                        window.location.href = `/doc/${res.newDocumentId}`;
+                                                    }
+                                                } catch (e) {
+                                                    alert('Failed to regenerate link');
+                                                    setSettingsLoading(false);
+                                                }
+                                            }}
+                                            disabled={settingsLoading}
+                                            className="px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm flex items-center gap-2 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
+                                        >
+                                            <RefreshCw className="w-4 h-4" />
+                                            Regenerate Link
+                                        </button>
+
                                         <button
                                             onClick={handleSettingsSave}
                                             disabled={settingsLoading}
-                                            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
                                         >
                                             {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                             Save Settings
@@ -2042,8 +2065,12 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-sm text-gray-500 italic bg-gray-50 dark:bg-gray-800 p-3 rounded-md">
-                                    Only the document owner can configure access time settings.
+                                <div className="flex items-start gap-3 p-4 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-md dark:bg-yellow-900/20 dark:text-yellow-200 dark:border-yellow-700/50">
+                                    <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+                                    <div className="text-sm">
+                                        <p className="font-semibold mb-1">Access Restricted</p>
+                                        <p className="text-yellow-700 dark:text-yellow-300">Only the document owner can configure access time settings.</p>
+                                    </div>
                                 </div>
                             )}
                         </div>

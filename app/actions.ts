@@ -4,6 +4,7 @@ import { put, del } from '@vercel/blob';
 import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { PDFDocument } from 'pdf-lib';
 
 interface Signature {
@@ -313,7 +314,54 @@ export async function uploadDocument(formData: FormData) {
     const documentId = result.rows[0].id;
 
     // 4. Return ID and ownerToken for client-side redirection
+    // Set cookie for persistence and server-side verification
+    // This allows page.tsx to verify ownership immediately after redirect without relying on localStorage
+    const cookieStore = await cookies();
+    cookieStore.set(`doc_owner_${documentId}`, ownerToken, {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true, // Secure: Client JS cannot read it, but Next.js Server Components can
+        sameSite: 'lax',
+        maxAge: 60 * 60 * 24 * 30 // 30 days
+    });
+
     return { success: true, documentId, url: blob.url, pageCount, ownerToken };
+}
+
+export async function updateDocumentSettings(documentId: string, settings: { startsAt?: string; expiresAt?: string }, ownerToken?: string) {
+    try {
+        // 1. Verify access
+        // Check cookie first if no token provided (robustness)
+        let tokenToCheck = ownerToken;
+        if (!tokenToCheck) {
+            const cookieStore = await cookies();
+            const cookie = cookieStore.get(`doc_owner_${documentId}`);
+            tokenToCheck = cookie?.value;
+        }
+
+        const docResult = await sql`SELECT owner_token FROM documents WHERE id = ${documentId}`;
+        if (docResult.rows.length === 0) throw new Error('Document not found');
+
+        if (docResult.rows[0].owner_token !== tokenToCheck) {
+            throw new Error('Unauthorized: Invalid owner token');
+        }
+
+        // 2. Update settings
+        if (settings.startsAt) {
+            await sql`UPDATE documents SET starts_at = ${settings.startsAt} WHERE id = ${documentId}`;
+        }
+        if (settings.expiresAt) {
+            await sql`UPDATE documents SET expires_at = ${settings.expiresAt} WHERE id = ${documentId}`;
+        }
+
+        revalidatePath(`/doc/${documentId}`);
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating document settings:', error);
+        if (error instanceof Error) {
+            throw new Error(error.message); // Preserve unauthorized message
+        }
+        throw new Error('Failed to update document settings');
+    }
 }
 
 export async function updateDocumentUrl(documentId: string, newUrl: string, oldUrl?: string) {
@@ -338,34 +386,6 @@ export async function updateDocumentUrl(documentId: string, newUrl: string, oldU
     }
 }
 
-export async function updateDocumentSettings(documentId: string, ownerToken: string, settings: { startsAt?: string; expiresAt?: string }) {
-    try {
-        // 1. Verify access
-        const docResult = await sql`SELECT owner_token FROM documents WHERE id = ${documentId}`;
-        if (docResult.rows.length === 0) throw new Error('Document not found');
-
-        if (docResult.rows[0].owner_token !== ownerToken) {
-            throw new Error('Unauthorized: Invalid owner token');
-        }
-
-        // 2. Update settings
-        if (settings.startsAt) {
-            await sql`UPDATE documents SET starts_at = ${settings.startsAt} WHERE id = ${documentId}`;
-        }
-        if (settings.expiresAt) {
-            await sql`UPDATE documents SET expires_at = ${settings.expiresAt} WHERE id = ${documentId}`;
-        }
-
-        revalidatePath(`/doc/${documentId}`);
-        return { success: true };
-    } catch (error) {
-        console.error('Error updating document settings:', error);
-        if (error instanceof Error) {
-            throw new Error(error.message); // Preserve unauthorized message
-        }
-        throw new Error('Failed to update document settings');
-    }
-}
 
 export async function sendInvitations(documentId: string, signers: { email: string; name: string }[], senderName?: string) {
     try {
@@ -572,5 +592,57 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
     } catch (error) {
         console.error('Error assembling PDF:', error);
         throw new Error('Failed to assemble PDF');
+    }
+}
+// ... existing code ...
+
+export async function regenerateDocumentLink(documentId: string) {
+    try {
+        // 1. Verify Ownership (Cookie Check)
+        const cookieStore = await cookies();
+        const token = cookieStore.get(`doc_owner_${documentId}`)?.value;
+        const docResult = await sql`SELECT * FROM documents WHERE id = ${documentId}`;
+
+        if (docResult.rows.length === 0) throw new Error('Document not found');
+        if (docResult.rows[0].owner_token !== token) throw new Error('Unauthorized');
+
+        const originalDoc = docResult.rows[0];
+        const newOwnerToken = crypto.randomUUID();
+
+        // 2. Create NEW Document (Copy)
+        const newDocResult = await sql`
+            INSERT INTO documents (url, expires_at, starts_at, owner_token, created_at)
+            VALUES (${originalDoc.url}, ${originalDoc.expires_at}, ${originalDoc.starts_at}, ${newOwnerToken}, NOW())
+            RETURNING id
+        `;
+        const newDocId = newDocResult.rows[0].id;
+
+        // 3. Copy Signatures
+        // We select all signatures from old doc and insert them for new doc
+        await sql`
+            INSERT INTO signatures (document_id, email, name, token, status, signed_at, x, y, width, height, page, scale, type, data, text, style)
+            SELECT ${newDocId}, email, name, token, status, signed_at, x, y, width, height, page, scale, type, data, text, style
+            FROM signatures
+            WHERE document_id = ${documentId}
+        `;
+
+        // 4. Set Cookie for New Owner Token
+        cookieStore.set(`doc_owner_${newDocId}`, newOwnerToken, {
+            secure: process.env.NODE_ENV === 'production',
+            httpOnly: true,
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 30
+        });
+
+        // 5. Delete Old Document (Optional: or keep as archive? User wants "new link", implying invalidating old one)
+        // Deleting old document invalidates the old link immediately.
+        await sql`DELETE FROM documents WHERE id = ${documentId}`;
+
+        // 6. Return new ID for redirect
+        return { success: true, newDocumentId: newDocId };
+
+    } catch (error) {
+        console.error('Error regenerating link:', error);
+        throw new Error('Failed to regenerate link');
     }
 }
