@@ -303,17 +303,17 @@ export async function uploadDocument(formData: FormData) {
     const pageCount = pdfDoc.getPageCount();
 
     // 3. Insert into Postgres
-    // We use RETURNING id to get the generated UUID
+    const ownerToken = crypto.randomUUID();
     const result = await sql`
-    INSERT INTO documents (url, expires_at)
-    VALUES (${blob.url}, ${expiresAt.toISOString()})
+    INSERT INTO documents (url, expires_at, starts_at, owner_token)
+    VALUES (${blob.url}, ${expiresAt.toISOString()}, ${new Date().toISOString()}, ${ownerToken})
     RETURNING id;
   `;
 
     const documentId = result.rows[0].id;
 
-    // 4. Return ID for client-side redirection
-    return { success: true, documentId, url: blob.url, pageCount };
+    // 4. Return ID and ownerToken for client-side redirection
+    return { success: true, documentId, url: blob.url, pageCount, ownerToken };
 }
 
 export async function updateDocumentUrl(documentId: string, newUrl: string, oldUrl?: string) {
@@ -335,6 +335,35 @@ export async function updateDocumentUrl(documentId: string, newUrl: string, oldU
     } catch (error) {
         console.error('Error updating document URL:', error);
         throw new Error('Failed to update document URL');
+    }
+}
+
+export async function updateDocumentSettings(documentId: string, ownerToken: string, settings: { startsAt?: string; expiresAt?: string }) {
+    try {
+        // 1. Verify access
+        const docResult = await sql`SELECT owner_token FROM documents WHERE id = ${documentId}`;
+        if (docResult.rows.length === 0) throw new Error('Document not found');
+
+        if (docResult.rows[0].owner_token !== ownerToken) {
+            throw new Error('Unauthorized: Invalid owner token');
+        }
+
+        // 2. Update settings
+        if (settings.startsAt) {
+            await sql`UPDATE documents SET starts_at = ${settings.startsAt} WHERE id = ${documentId}`;
+        }
+        if (settings.expiresAt) {
+            await sql`UPDATE documents SET expires_at = ${settings.expiresAt} WHERE id = ${documentId}`;
+        }
+
+        revalidatePath(`/doc/${documentId}`);
+        return { success: true };
+    } catch (error) {
+        console.error('Error updating document settings:', error);
+        if (error instanceof Error) {
+            throw new Error(error.message); // Preserve unauthorized message
+        }
+        throw new Error('Failed to update document settings');
     }
 }
 

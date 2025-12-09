@@ -12,6 +12,8 @@ import {
     Save,
     Download,
     Trash2,
+    Settings,
+    CalendarClock,
     Type,
     CheckSquare,
     X,
@@ -41,9 +43,10 @@ import {
     AlignLeft,
     AlignCenter,
     AlignRight,
+    Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { addSignatures, generateSignedPdf, deleteSignature, updateSignature, deleteDocument, generateSignedZip } from '@/app/actions';
+import { addSignatures, generateSignedPdf, deleteSignature, updateSignature, deleteDocument, generateSignedZip, updateDocumentSettings } from '@/app/actions';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
@@ -122,6 +125,11 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
     const [copied, setCopied] = useState(false);
     const [signatureData, setSignatureData] = useState('');
     const [localSignatures, setLocalSignatures] = useState<Signature[]>(existingSignatures);
+    const [isOwner, setIsOwner] = useState(false);
+    const [showSettingsModal, setShowSettingsModal] = useState(false);
+    const [settingsStart, setSettingsStart] = useState('');
+    const [settingsEnd, setSettingsEnd] = useState('');
+    const [settingsLoading, setSettingsLoading] = useState(false);
     const [modifiedSignatureIds, setModifiedSignatureIds] = useState<Set<string>>(new Set());
     const [isChecklistMode, setIsChecklistMode] = useState(false);
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
@@ -221,7 +229,76 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
         }
     }
 
-    function onDocumentLoadSuccess(docId: string, { numPages }: { numPages: number }) {
+    const [accessDenied, setAccessDenied] = useState<{ reason: 'expired' | 'future' } | null>(null);
+
+    useEffect(() => {
+        // Check for owner access
+        const checkOwnerAccess = () => {
+            const hasAccess = localDocuments.some(doc => {
+                const token = localStorage.getItem(`doc_owner_${doc.id}`);
+                console.log(`[Permission Check] Doc ID: ${doc.id}, Token found: ${!!token}`);
+                return !!token;
+            });
+            console.log('[Permission Check] Final isOwner:', hasAccess);
+            setIsOwner(hasAccess);
+            return hasAccess;
+        };
+
+        const hasAccess = checkOwnerAccess();
+
+        // Also listen for storage events in case tabs change
+        window.addEventListener('storage', checkOwnerAccess);
+
+        // Retry check after a short delay to handle hydration
+        const timer = setTimeout(checkOwnerAccess, 500);
+
+        // Access Check (Run immediately)
+        if (!hasAccess && localDocuments.length > 0) {
+            const now = new Date();
+            const doc = localDocuments[0];
+
+            if (doc.expires_at && new Date(doc.expires_at) < now) {
+                setAccessDenied({ reason: 'expired' });
+            } else if (doc.starts_at && new Date(doc.starts_at) > now) {
+                setAccessDenied({ reason: 'future' });
+            } else {
+                setAccessDenied(null);
+            }
+        } else {
+            setAccessDenied(null); // Owners always have access
+        }
+
+        return () => {
+            window.removeEventListener('storage', checkOwnerAccess);
+            clearTimeout(timer);
+        };
+
+    }, [localDocuments]);
+
+    const handleSettingsSave = async () => {
+        setSettingsLoading(true);
+        try {
+            // Apply to all docs for now (or simplified logic)
+            // Ideally we iterate or pick one. Let's update the active doc or all.
+            for (const doc of localDocuments) {
+                const token = localStorage.getItem(`doc_owner_${doc.id}`);
+                if (token) {
+                    await updateDocumentSettings(doc.id, token, {
+                        startsAt: settingsStart ? new Date(settingsStart).toISOString() : undefined,
+                        expiresAt: settingsEnd ? new Date(settingsEnd).toISOString() : undefined
+                    });
+                }
+            }
+            alert('Settings updated successfully!');
+            setShowSettingsModal(false);
+        } catch (e) {
+            alert('Failed to update settings. ' + (e instanceof Error ? e.message : ''));
+        } finally {
+            setSettingsLoading(false);
+        }
+    };
+
+    const onDocumentLoadSuccess = (docId: string, { numPages }: { numPages: number }) => {
         setNumPagesMap(prev => ({ ...prev, [docId]: numPages }));
     }
 
@@ -239,10 +316,10 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
         } else if (sigCanvas.current) {
             // Only check canvas if no uploaded image
             if (sigCanvas.current.isEmpty()) {
-                // If canvas is empty and no uploaded image, maybe alert? 
-                // But current logic allows empty canvas if name is present? 
-                // Actually original code checked sigCanvas.current (existence) but not isEmpty() explicitly in the if condition, 
-                // but getTrimmedCanvas() might return empty. 
+                // If canvas is empty and no uploaded image, maybe alert?
+                // But current logic allows empty canvas if name is present?
+                // Actually original code checked sigCanvas.current (existence) but not isEmpty() explicitly in the if condition,
+                // but getTrimmedCanvas() might return empty.
                 // Let's stick to original logic: if canvas exists and name exists.
                 // But we should probably check if it's empty to avoid empty signatures.
                 // For now, mirroring original behavior but prioritizing upload.
@@ -624,11 +701,27 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
 
             try {
                 const { uploadDocument } = await import('@/app/actions');
-                const result = await uploadDocument(formData);
-                if (result.success && result.documentId) {
+                const res = await uploadDocument(formData);
+                if (res.success) {
+                    console.log('Upload success, result:', res);
+                    // Save owner token
+                    if (res.ownerToken) {
+                        try {
+                            localStorage.setItem(`doc_owner_${res.documentId}`, res.ownerToken);
+                            console.log('[Upload] Saved owner token to localStorage:', `doc_owner_${res.documentId}`, res.ownerToken);
+                            // Immediate check to verify persistence
+                            const verify = localStorage.getItem(`doc_owner_${res.documentId}`);
+                            console.log('[Upload] Verification read:', verify);
+                            setIsOwner(true);
+                        } catch (e) {
+                            console.error('[Upload] Failed to save token to localStorage:', e);
+                        }
+                    }
+
                     // Prepend new ID to URL (so it appears first)
-                    const currentIds = documents.map(d => d.id);
-                    const newIds = [result.documentId, ...currentIds].join(',');
+                    // Use localDocuments to get current IDs
+                    const currentIds = localDocuments.map(d => d.id);
+                    const newIds = [res.documentId, ...currentIds].join(',');
                     window.location.href = `/doc/${newIds}`;
                 }
             } catch (error) {
@@ -648,34 +741,25 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
 
             try {
                 // We need to upload the new file first to get a URL
-                // Re-using uploadDocument but we only need the URL really, 
+                // Re-using uploadDocument but we only need the URL really,
                 // but uploadDocument creates a new DB entry which we don't want if we are replacing.
                 // Ideally we should have a separate uploadFile action or modify uploadDocument.
-                // For simplicity, let's use put from client or a new action. 
-                // Wait, uploadDocument does everything. 
-                // Let's use a direct upload action or just use uploadDocument and then update the old doc record with new URL and delete the temp doc? 
+                // For simplicity, let's use put from client or a new action.
+                // Wait, uploadDocument does everything.
+                // Let's use a direct upload action or just use uploadDocument and then update the old doc record with new URL and delete the temp doc?
                 // No, better to have a clean action.
                 // Let's assume we can use a client-side upload or a specific server action.
                 // Since I can't easily add a new generic upload action without modifying actions.ts again (which I did for updateDocumentUrl but not uploadFile),
-                // I will use uploadDocument to get the file up, then update the *current* document's URL with the *new* document's URL, 
-                // and then delete the *new* document record (but keep the file!). 
+                // I will use uploadDocument to get the file up, then update the *current* document's URL with the *new* document's URL,
+                // and then delete the *new* document record (but keep the file!).
                 // This is a bit hacky but works with existing tools.
                 // ACTUALLY, I can just import put from vercel/blob in a server action.
                 // I'll stick to the plan: I added updateDocumentUrl. I need to upload the file first.
-                // I'll use the existing uploadDocument, get the new ID, fetch that doc to get URL, then update old doc, then delete new doc entry.
-                // OR simpler: I'll just use uploadDocument, get the new ID, and redirect to a URL where the old ID is replaced by the new ID.
-                // This effectively "replaces" it in the view, but creates a new DB record. 
-                // The user said "replace", which usually means keeping the same ID/context? 
-                // If I replace ID, I lose signatures associated with the old ID. 
-                // So I MUST keep the old ID.
-                // So I need to upload the file and get a URL.
-                // I will use `uploadDocument` to upload, it returns ID. I will then query that new doc to get its URL.
-                // Then I call `updateDocumentUrl(oldDocId, newUrl, oldUrl)`.
-                // Then I delete the temporary new document record (but NOT the file!).
+                // I'll use the existing uploadDocument, get the new ID, fetch that doc to get URL. Then update old doc, then delete new doc entry.
                 // `deleteDocument` deletes file.
-                // Okay, I will just use `uploadDocument`, get the new ID, and swap the IDs in the URL. 
+                // Okay, I will just use `uploadDocument`, get the new ID, and swap the IDs in the URL.
                 // This treats it as a "new" document in the system, but visually replaces the old one.
-                // Signatures on the old document will be lost (or rather, not shown). 
+                // Signatures on the old document will be lost (or rather, not shown).
                 // This is probably safer/expected behavior when replacing a file entirely (layout changes etc).
                 // So: Upload new -> Get New ID -> Delete Old Doc -> Redirect to URL with New ID in place of Old.
 
@@ -686,7 +770,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     await deleteDocument(docId, oldUrl);
 
                     // Replace ID in URL
-                    const currentIds = documents.map(d => d.id);
+                    const currentIds = localDocuments.map(d => d.id);
                     const index = currentIds.indexOf(docId);
                     if (index !== -1) {
                         currentIds[index] = result.documentId;
@@ -1033,11 +1117,11 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     <div className="flex items-center gap-4">
                         <h1 className="font-semibold text-gray-700 dark:text-gray-200 hidden md:block">Sign Document</h1>
                         <button
-                            onClick={handleShare}
+                            onClick={() => setShowSettingsModal(true)}
                             className="flex items-center px-3 py-1.5 text-sm border rounded-full hover:bg-gray-50 text-gray-600 transition-colors dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                         >
-                            {copied ? <Check className="w-4 h-4 mr-1 text-green-500" /> : <Share2 className="w-4 h-4 mr-1" />}
-                            {copied ? 'Copied!' : 'Share Link'}
+                            <Share2 className="w-4 h-4 mr-1" />
+                            Share
                         </button>
 
                         <button
@@ -1221,6 +1305,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                             {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
                             {documents.length > 1 ? 'Download All' : 'Download PDF'}
                         </button>
+
                     </div>
                 </div>
             </div>
@@ -1394,7 +1479,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                                             e.stopPropagation();
                                                             setSelectedSignatureId(sig.id);
                                                         }}
-                                                        onDragStop={(e, d) => !isSelected && handleUpdateSavedSignature(sig.id, { x: d.x / scale, y: d.y / scale })}
+                                                        onDragStop={(e, d) => handleUpdateSavedSignature(sig.id, { x: d.x / scale, y: d.y / scale })}
                                                         onResizeStop={(e, direction, ref, delta, position) => {
                                                             handleUpdateSavedSignature(sig.id, {
                                                                 width: parseInt(ref.style.width) / scale,
@@ -1533,7 +1618,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                                         e.stopPropagation();
                                                         setSelectedSignatureId(sig.id);
                                                     }}
-                                                    onDragStop={(e, d) => !isSelected && updateDraftSignature(sig.id, { x: d.x / scale, y: d.y / scale })}
+                                                    onDragStop={(e, d) => updateDraftSignature(sig.id, { x: d.x / scale, y: d.y / scale })}
                                                     onResizeStop={(e, direction, ref, delta, position) => {
                                                         updateDraftSignature(sig.id, {
                                                             width: parseInt(ref.style.width) / scale,
@@ -1836,6 +1921,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                             accept="image/png, image/jpeg, image/jpg"
                                             className="hidden"
                                             onChange={handleUploadSignature}
+
                                         />
                                     </label>
                                 </div>
@@ -1874,6 +1960,96 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     </div>
                 )
             }
+
+            {/* Share & Settings Modal */}
+            {showSettingsModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-800">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-xl font-semibold flex items-center gap-2">
+                                <Share2 className="w-5 h-5 text-blue-600" />
+                                Share Document
+                            </h2>
+                            <button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-gray-600">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-6">
+                            {/* Link Section */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Document Link
+                                </label>
+                                <div className="flex gap-2">
+                                    <input
+                                        readOnly
+                                        value={window.location.href}
+                                        className="flex-1 p-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-600 dark:text-gray-300"
+                                    />
+                                    <button
+                                        onClick={handleShare}
+                                        className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md transition-colors"
+                                        title="Copy Link"
+                                    >
+                                        {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <hr className="dark:border-gray-800" />
+
+                            {/* Settings Section - Only for Owner */}
+                            {isOwner ? (
+                                <div className="space-y-4">
+                                    <h3 className="font-medium text-gray-900 dark:text-gray-200 flex items-center gap-2">
+                                        <Settings className="w-4 h-4" />
+                                        Access Settings
+                                    </h3>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Start Time (Active From)
+                                        </label>
+                                        <input
+                                            type="datetime-local"
+                                            value={settingsStart}
+                                            onChange={(e) => setSettingsStart(e.target.value)}
+                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Expiry Time (Active Until)
+                                        </label>
+                                        <input
+                                            type="datetime-local"
+                                            value={settingsEnd}
+                                            onChange={(e) => setSettingsEnd(e.target.value)}
+                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700"
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-end pt-2">
+                                        <button
+                                            onClick={handleSettingsSave}
+                                            disabled={settingsLoading}
+                                            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                                        >
+                                            {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                            Save Settings
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-sm text-gray-500 italic bg-gray-50 dark:bg-gray-800 p-3 rounded-md">
+                                    Only the document owner can configure access time settings.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 }

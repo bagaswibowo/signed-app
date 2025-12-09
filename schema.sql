@@ -5,7 +5,9 @@ CREATE TABLE IF NOT EXISTS documents (
   url TEXT NOT NULL,
   signed_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  starts_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- When the link becomes active
   expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+  owner_token TEXT, -- Token stored in local storage to identify the creator
   owner_email TEXT -- Optional: to track who uploaded it
 );
 
