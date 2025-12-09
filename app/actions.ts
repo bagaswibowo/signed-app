@@ -282,29 +282,53 @@ export async function deleteDocument(documentId: string, fileUrl: string) {
 
 export async function uploadDocument(formData: FormData) {
     const file = formData.get('file') as File;
-
     if (!file) {
-        throw new Error('No file provided');
+        throw new Error('No file uploaded');
     }
 
-    // 1. Upload to Vercel Blob
-    // 1. Upload to Vercel Blob
-    const blob = await put(file.name, file, {
+    // 1. Prepare Buffer and Check Type
+    let buffer = Buffer.from(await file.arrayBuffer()) as Buffer;
+    let isDocx = false;
+
+    // Check for DOCX
+    if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx')) {
+        isDocx = true;
+        try {
+            const { convertDocxToPdf } = await import('@/lib/docx-converter');
+            buffer = await convertDocxToPdf(buffer);
+        } catch (e) {
+            console.error('DOCX Conversion Failed:', e);
+            return { success: false, error: 'Failed to convert DOCX file. Please ensure it is a valid Word document.' };
+        }
+    } else if (file.type !== 'application/pdf') {
+        const header = buffer.subarray(0, 4).toString('ascii');
+        if (header !== '%PDF') {
+            return { success: false, error: 'Only PDF and DOCX files are supported.' };
+        }
+    }
+
+    // 2. Validate PDF (Parse and count pages)
+    let pageCount = 0;
+    try {
+        const pdfDoc = await PDFDocument.load(buffer);
+        pageCount = pdfDoc.getPageCount();
+    } catch (e) {
+        console.error('PDF Parse Error:', e);
+        return { success: false, error: 'Failed to parse document.' };
+    }
+
+    // 3. Upload to Vercel Blob
+    const uploadFilename = isDocx ? file.name.replace(/\.docx$/i, '.pdf') : file.name;
+    const blob = await put(uploadFilename, buffer, {
         access: 'public',
         addRandomSuffix: true,
     });
 
-    // 2. Calculate expiry (14 days from now)
+    // 4. Insert into Postgres
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 14);
-
-    // 2.5 Calculate Page Count
-    const arrayBuffer = await file.arrayBuffer();
-    const pdfDoc = await PDFDocument.load(arrayBuffer);
-    const pageCount = pdfDoc.getPageCount();
-
-    // 3. Insert into Postgres
     const ownerToken = crypto.randomUUID();
+
     const result = await sql`
     INSERT INTO documents (url, expires_at, starts_at, owner_token)
     VALUES (${blob.url}, ${expiresAt.toISOString()}, ${new Date().toISOString()}, ${ownerToken})
@@ -313,13 +337,11 @@ export async function uploadDocument(formData: FormData) {
 
     const documentId = result.rows[0].id;
 
-    // 4. Return ID and ownerToken for client-side redirection
     // Set cookie for persistence and server-side verification
-    // This allows page.tsx to verify ownership immediately after redirect without relying on localStorage
     const cookieStore = await cookies();
     cookieStore.set(`doc_owner_${documentId}`, ownerToken, {
         secure: process.env.NODE_ENV === 'production',
-        httpOnly: true, // Secure: Client JS cannot read it, but Next.js Server Components can
+        httpOnly: true,
         sameSite: 'lax',
         maxAge: 60 * 60 * 24 * 30 // 30 days
     });

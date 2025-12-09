@@ -48,7 +48,7 @@ export default function Home() {
 
   const handleUploadFiles = async (files: File[]) => {
     const newUploads: UploadItem[] = files
-      .filter(file => file.type === 'application/pdf')
+      .filter(file => file.type === 'application/pdf' || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx'))
       .map(file => ({
         id: crypto.randomUUID(),
         file,
@@ -56,7 +56,7 @@ export default function Home() {
       }));
 
     if (newUploads.length === 0) {
-      alert('Please upload PDF files only.');
+      alert('Please upload PDF or DOCX files only.');
       return;
     }
 
@@ -113,7 +113,7 @@ export default function Home() {
           <input
             type="file"
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-            accept="application/pdf"
+            accept="application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             multiple
             onChange={handleFileChange}
           />
@@ -127,7 +127,7 @@ export default function Home() {
                 Click to upload or drag and drop
               </p>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                PDF (MAX. 4MB) - Multiple files allowed
+                PDF & DOCX (MAX. 20MB) - Multiple files allowed
               </p>
             </div>
           </div>

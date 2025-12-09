@@ -950,7 +950,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
 
                 // Create new virtual pages
                 const newVirtualPages: VirtualPage[] = [];
-                for (let i = 1; i <= pageCount; i++) {
+                for (let i = 1; i <= (pageCount || 0); i++) {
                     newVirtualPages.push({
                         id: crypto.randomUUID(),
                         docId: documentId,
@@ -980,7 +980,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
         // Trigger file input
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = 'application/pdf';
+        input.accept = 'application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document';
         input.onchange = async (e) => {
             const file = (e.target as HTMLInputElement).files?.[0];
             if (!file) return;
@@ -1005,7 +1005,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                 setNumPagesMap(prev => ({ ...prev, [documentId]: pageCount }));
 
                 const newVirtualPages: VirtualPage[] = [];
-                for (let i = 1; i <= pageCount; i++) {
+                for (let i = 1; i <= (pageCount || 0); i++) {
                     newVirtualPages.push({
                         id: crypto.randomUUID(),
                         docId: documentId,
@@ -1162,7 +1162,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                         <input
                             id="add-doc-input"
                             type="file"
-                            accept="application/pdf"
+                            accept="application/pdf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                             className="hidden"
                             onChange={handleAddDocument}
                         />
