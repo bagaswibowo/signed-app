@@ -642,8 +642,8 @@ export async function regenerateDocumentLink(documentId: string) {
         // 3. Copy Signatures
         // We select all signatures from old doc and insert them for new doc
         await sql`
-            INSERT INTO signatures (document_id, email, name, token, status, signed_at, x, y, width, height, page, scale, type, data, text, style)
-            SELECT ${newDocId}, email, name, token, status, signed_at, x, y, width, height, page, scale, type, data, text, style
+            INSERT INTO signatures (document_id, name, data, x, y, width, height, page)
+            SELECT ${newDocId}, name, data, x, y, width, height, page
             FROM signatures
             WHERE document_id = ${documentId}
         `;
