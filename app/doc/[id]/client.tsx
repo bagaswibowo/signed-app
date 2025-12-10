@@ -47,6 +47,9 @@ import {
     Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { addSignatures, generateSignedPdf, deleteSignature, updateSignature, deleteDocument, generateSignedZip, updateDocumentSettings } from '@/app/actions';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -141,6 +144,10 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
     const [uploadedSignatureImage, setUploadedSignatureImage] = useState<string | null>(null);
     const [nameError, setNameError] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+    const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
+    const [isRegenerateDialogOpen, setIsRegenerateDialogOpen] = useState(false);
+    const [deleteDocId, setDeleteDocId] = useState<string | null>(null);
+
 
     // New state for duplication
     const [selectedSignatureId, setSelectedSignatureId] = useState<string | null>(null);
@@ -661,12 +668,15 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
     };
 
     const handleDownloadPdf = async () => {
-        if (!confirm('Are you sure you want to download the signed PDF?\nPassword for this document (if any) will be deleted.')) {
-            return;
-        }
+        setIsDownloadDialogOpen(true);
+    };
 
+    const confirmDownloadPdf = async () => {
+        setIsDownloadDialogOpen(false);
         setIsGenerating(true);
+
         try {
+
             // Dynamically import
             const { assembleAndSignPdf, deleteDocument } = await import('@/app/actions');
 
@@ -801,15 +811,29 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
         }
     };
 
-    const handleDeleteSingleDocument = async (docId: string, fileUrl: string) => {
-        if (!confirm('Are you sure you want to delete this file?')) return;
+    const handleDeleteSingleDocument = (docId: string, fileUrl: string) => {
+        setDeleteDocId(docId);
+        // We need to store fileUrl too if we want to delete it in the confirm handler, 
+        // or just re-find it. Storing docId is enough to find the doc in 'documents' prop or localDocuments.
+    };
+
+    const confirmDeleteSingleDocument = async () => {
+        const idToDelete = deleteDocId;
+        if (!idToDelete) return;
+
+        const doc = localDocuments.find(d => d.id === idToDelete);
+        if (!doc) return;
+
+        const fileUrl = doc.url;
+        setDeleteDocId(null);
+
         try {
             const { deleteDocument } = await import('@/app/actions');
-            await deleteDocument(docId, fileUrl);
+            await deleteDocument(idToDelete, fileUrl);
 
             // Remove ID from URL
             const currentIds = documents.map(d => d.id);
-            const newIds = currentIds.filter(id => id !== docId);
+            const newIds = currentIds.filter(id => id !== idToDelete);
 
             if (newIds.length === 0) {
                 window.location.href = '/';
@@ -1121,7 +1145,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [selectedSignatureId, clipboardSignature, newSignatures, localSignatures, activePage, activeDocId]);
     return (
-        <div className={cn("min-h-screen bg-gray-100 dark:bg-gray-900 flex flex-col", theme === 'dark' && 'dark')}>
+        <div className={cn("min-h-screen bg-slate-100 dark:bg-slate-900 flex flex-col", theme === 'dark' && 'dark')}>
             {/* Toolbar */}
             <div className="sticky top-0 z-[100] flex flex-col shadow-sm">
                 {/* Warning Banner */}
@@ -1129,9 +1153,10 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     PERINGATAN: File akan otomatis terhapus ketika "Download All" di klik jadi pastikan semua ttd sudah dibubuhkan
                 </div>
 
-                <div className="bg-white dark:bg-gray-900 border-b dark:border-gray-800 p-4 flex flex-wrap gap-4 justify-between items-center">
+                <div className="bg-white dark:bg-slate-900 border-b dark:border-slate-800 p-4
+ flex flex-wrap gap-4 justify-between items-center">
                     <div className="flex items-center gap-4">
-                        <h1 className="font-semibold text-gray-700 dark:text-gray-200 hidden md:block">Sign Document</h1>
+                        <h1 className="font-semibold text-slate-700 dark:text-slate-200 hidden md:block">Sign Document</h1>
                         <button
                             onClick={() => setShowSettingsModal(true)}
                             className="flex items-center px-3 py-1.5 text-sm border rounded-full hover:bg-gray-50 text-gray-600 transition-colors dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
@@ -1142,7 +1167,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
 
                         <button
                             onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
-                            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors"
+                            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
                             title="Toggle Theme"
                         >
                             {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
@@ -1177,13 +1202,13 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     <div className="flex gap-2 items-center">
                         {/* Editor Tools */}
                         {/* MacOS-Style Annotation Toolbar */}
-                        <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-md p-1 gap-1 border border-gray-200 dark:border-gray-700 shadow-sm">
+                        <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-md p-1 gap-1 border border-slate-200 dark:border-slate-700 shadow-sm">
                             {/* Selection Tool */}
                             <button
                                 onClick={() => setActiveTool('select')}
                                 className={cn(
                                     "p-1.5 rounded-md transition-colors",
-                                    activeTool === 'select' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                    activeTool === 'select' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-slate-600 dark:text-slate-300"
                                 )}
                                 title="Select"
                             >
@@ -1197,7 +1222,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                 onClick={() => setActiveTool('text')}
                                 className={cn(
                                     "p-1.5 rounded-md transition-colors",
-                                    activeTool === 'text' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                    activeTool === 'text' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-slate-600 dark:text-slate-300"
                                 )}
                                 title="Text"
                             >
@@ -1209,7 +1234,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                 onClick={() => setActiveTool('rect')}
                                 className={cn(
                                     "p-1.5 rounded-md transition-colors",
-                                    activeTool === 'rect' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                    activeTool === 'rect' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-slate-600 dark:text-slate-300"
                                 )}
                                 title="Rectangle"
                             >
@@ -1219,7 +1244,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                 onClick={() => setActiveTool('circle')}
                                 className={cn(
                                     "p-1.5 rounded-md transition-colors",
-                                    activeTool === 'circle' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                    activeTool === 'circle' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-slate-600 dark:text-slate-300"
                                 )}
                                 title="Circle"
                             >
@@ -1233,7 +1258,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                 onClick={() => setActiveTool('draw')}
                                 className={cn(
                                     "p-1.5 rounded-md transition-colors",
-                                    activeTool === 'draw' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+                                    activeTool === 'draw' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-slate-600 dark:text-slate-300"
                                 )}
                                 title="Draw"
                             >
@@ -1284,7 +1309,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                             </span>
                             <button
                                 onClick={handleZoomIn}
-                                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-r-md text-gray-600 dark:text-gray-300"
+                                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-r-md text-slate-600 dark:text-slate-300"
                                 title="Zoom In"
                             >
                                 <ZoomIn className="w-4 h-4" />
@@ -1328,7 +1353,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
 
             <div className="flex flex-1 overflow-hidden">
                 {/* PDF View */}
-                <div className="flex-1 overflow-auto p-4 flex flex-col items-center bg-gray-100 dark:bg-gray-900 space-y-8" ref={containerRef}>
+                <div className="flex-1 overflow-auto p-4 flex flex-col items-center bg-slate-100 dark:bg-slate-900 space-y-8" ref={containerRef}>
                     {!isInitialized && documents.length > 0 && (
                         <div className="flex flex-col items-center justify-center p-12">
                             <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-2" />
@@ -1360,7 +1385,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                 {isNewDoc && (
                                     <div className="w-full max-w-[600px] flex flex-col items-start mt-8 mb-4">
                                         {index > 0 && <div className="w-full h-px bg-gray-300 dark:bg-gray-700 mb-8" />}
-                                        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                                        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
                                             <div className="bg-gray-200 dark:bg-gray-800 p-1.5 rounded-md">
                                                 <FilePlus className="w-4 h-4" />
                                             </div>
@@ -1389,28 +1414,28 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     )}>
                                         <button
                                             onClick={() => handleVirtualRotate(index)}
-                                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-700 dark:text-gray-200"
+                                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-slate-700 dark:text-slate-200"
                                             title="Rotate"
                                         >
                                             <RotateCw className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={() => handleVirtualInsert(index)}
-                                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-700 dark:text-gray-200"
+                                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-slate-700 dark:text-slate-200"
                                             title="Insert Page After"
                                         >
                                             <FilePlus className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={() => handleVirtualReplace(index)}
-                                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-700 dark:text-gray-200"
+                                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-slate-700 dark:text-slate-200"
                                             title="Replace Page"
                                         >
                                             <FileInput className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={() => handleVirtualDelete(index)}
-                                            className="p-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md text-gray-700 dark:text-gray-200"
+                                            className="p-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md text-slate-700 dark:text-slate-200"
                                             title="Delete"
                                         >
                                             <Trash2 className="w-4 h-4" />
@@ -1785,7 +1810,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             {
                 showHistory && (
                     <div className="fixed top-0 right-0 h-full w-80 bg-white dark:bg-gray-900 border-l dark:border-gray-700 shadow-2xl z-50 overflow-y-auto animate-in slide-in-from-right duration-300">
-                        <div className="p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-between sticky top-0 z-10">
+                        <div className="p-4 border-b dark:border-gray-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between sticky top-0 z-10">
                             <h2 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center">
                                 <History className="w-4 h-4 mr-2" />
                                 Document History
@@ -1794,15 +1819,15 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                 onClick={() => setShowHistory(false)}
                                 className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
                             >
-                                <X className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                                <X className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                             </button>
                         </div>
                         <div className="p-4 space-y-6">
                             {/* Document Created Event */}
-                            <div className="relative pl-4 border-l-2 border-gray-200 dark:border-gray-700">
+                            <div className="relative pl-4 border-l-2 border-slate-200 dark:border-slate-700">
                                 <div className="absolute -left-[5px] top-0 w-2 h-2 rounded-full bg-gray-400" />
                                 <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Documents Uploaded</p>
-                                <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(documents[0].created_at)}</p>
+                                <p className="text-xs text-slate-500 dark:text-slate-400">{formatDate(documents[0].created_at)}</p>
                             </div>
 
                             {/* Signatures */}
@@ -1810,7 +1835,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                 <div key={i} className="relative pl-4 border-l-2 border-blue-200 dark:border-blue-900">
                                     <div className="absolute -left-[5px] top-0 w-2 h-2 rounded-full bg-blue-500" />
                                     <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Signed by {sig.name}</p>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(sig.created_at)}</p>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">{formatDate(sig.created_at)}</p>
                                     <p className="text-xs text-gray-400 mt-1">Page {sig.page}</p>
                                 </div>
                             ))}
@@ -1825,7 +1850,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
 
 
             {/* Floating Action Bar for Adding Items - Moved to Main Scope */}
-            < div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-white dark:bg-gray-800 p-1.5 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 z-50" >
+            < div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-4 bg-white dark:bg-gray-800 p-1.5 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 z-50" >
                 <button
                     onClick={() => {
                         setIsDrawing(true);
@@ -1932,7 +1957,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                 </div>
 
                                 <div className="flex items-center justify-between pt-4 border-t dark:border-gray-700">
-                                    <span className="text-sm text-gray-500 dark:text-gray-400">Or upload image</span>
+                                    <span className="text-sm text-slate-500 dark:text-slate-400">Or upload image</span>
                                     <label className="cursor-pointer px-3 py-1.5 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-300 text-sm flex items-center transition-colors">
                                         <UploadIcon className="w-4 h-4 mr-2" />
                                         Upload Image
@@ -1975,7 +2000,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center backdrop-blur-sm">
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl flex flex-col items-center">
                             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-4" />
-                            <p className="text-gray-700 dark:text-gray-200 font-medium">Uploading Document...</p>
+                            <p className="text-slate-700 dark:text-slate-200 font-medium">Uploading Document...</p>
                         </div>
                     </div>
                 )
@@ -2005,7 +2030,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     <input
                                         readOnly
                                         value={window.location.href}
-                                        className="flex-1 p-2 text-sm bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-md text-gray-600 dark:text-gray-300"
+                                        className="flex-1 p-2 text-sm bg-slate-50 dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-md text-slate-600 dark:text-slate-300"
                                     />
                                     <button
                                         onClick={handleShare}
@@ -2068,19 +2093,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     <div className="flex justify-end pt-2 gap-2">
                                         <button
                                             onClick={async () => {
-                                                if (!confirm('Are you sure? This will invalidate the current link instantly and generate a new one. Everyone using the old link will lose access.')) return;
-
-                                                setSettingsLoading(true);
-                                                try {
-                                                    const { regenerateDocumentLink } = await import('@/app/actions');
-                                                    const res = await regenerateDocumentLink(documents[0].id);
-                                                    if (res.newDocumentId) {
-                                                        window.location.href = `/doc/${res.newDocumentId}`;
-                                                    }
-                                                } catch (e) {
-                                                    alert('Failed to regenerate link');
-                                                    setSettingsLoading(false);
-                                                }
+                                                setIsRegenerateDialogOpen(true);
                                             }}
                                             disabled={settingsLoading}
                                             className="px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm flex items-center gap-2 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
@@ -2112,6 +2125,76 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     </div>
                 </div>
             )}
+            {/* Dialogs */}
+            <Dialog open={isDownloadDialogOpen} onOpenChange={setIsDownloadDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Download Signed PDF?</DialogTitle>
+                        <DialogDescription>
+                            This will merge all signatures into the PDF.
+                            <br /><strong>Note:</strong> Password protection (if any) will be removed and source files will be deleted as per the 14-day auto-delete policy.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsDownloadDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={confirmDownloadPdf} disabled={isGenerating}>
+                            {isGenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                            Download
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!deleteDocId} onOpenChange={(open) => !open && setDeleteDocId(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Document?</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete this file? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setDeleteDocId(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={confirmDeleteSingleDocument}>Delete</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isRegenerateDialogOpen} onOpenChange={setIsRegenerateDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Regenerate Link?</DialogTitle>
+                        <DialogDescription>
+                            This will <strong>invalidate the current link instantly</strong>. Everyone using the old link will lose access.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsRegenerateDialogOpen(false)}>Cancel</Button>
+                        <Button
+                            variant="destructive"
+                            onClick={async () => {
+                                setIsRegenerateDialogOpen(false);
+                                setSettingsLoading(true);
+                                try {
+                                    const { regenerateDocumentLink } = await import('@/app/actions');
+                                    const res = await regenerateDocumentLink(documents[0].id);
+                                    if (res.newDocumentId) {
+                                        window.location.href = `/doc/${res.newDocumentId}`;
+                                    }
+                                } catch (e) {
+                                    alert('Failed to regenerate link');
+                                    setSettingsLoading(false);
+                                }
+                            }}
+                            disabled={settingsLoading}
+                        >
+                            {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                            Regenerate
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div >
+
     );
 }

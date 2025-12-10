@@ -711,3 +711,38 @@ export async function verifyDocumentPassword(documentId: string, password: strin
         return { success: false, error: 'Verification failed' };
     }
 }
+
+export async function createDocumentRecord(
+    url: string,
+    pageCount: number,
+    originalName?: string
+) {
+    try {
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 14);
+        const ownerToken = crypto.randomUUID();
+
+        const result = await sql`
+      INSERT INTO documents (url, expires_at, starts_at, owner_token)
+      VALUES (${url}, ${expiresAt.toISOString()}, ${new Date().toISOString()}, ${ownerToken})
+      RETURNING id;
+    `;
+
+        const documentId = result.rows[0].id;
+
+        // Set cookie for persistence
+        const cookieStore = await cookies();
+        cookieStore.set(`doc_owner_${documentId}`, ownerToken, {
+            secure: process.env.NODE_ENV === 'production',
+            httpOnly: true,
+            sameSite: 'lax',
+            maxAge: 60 * 60 * 24 * 30
+        });
+
+        return { success: true, documentId, ownerToken };
+
+    } catch (error) {
+        console.error('Error creating document record:', error);
+        throw new Error('Failed to create document record');
+    }
+}
