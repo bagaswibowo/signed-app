@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@sparticuz/chromium": "^143.0.0",
     "@vercel/blob": "^2.0.0",
     "@vercel/postgres": "^0.10.0",
     "clsx": "^2.1.1",
@@ -17,7 +18,7 @@
     "mammoth": "^1.11.0",
     "next": "^16.0.7",
     "pdf-lib": "^1.17.1",
-    "puppeteer": "^24.32.1",
+    "puppeteer-core": "^24.32.1",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-draggable": "^4.5.0",
@@ -35,6 +36,7 @@
     "eslint": "^9.39.1",
     "eslint-config-next": "^16.0.7",
     "postcss": "^8.5.6",
+    "puppeteer": "^24.32.1",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3"
   }

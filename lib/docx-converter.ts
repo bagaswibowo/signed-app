@@ -1,6 +1,8 @@
-
 import mammoth from 'mammoth';
-import puppeteer from 'puppeteer';
+
+// Conditional imports are handled inside the function to avoid bundling issues
+// but we need types for TS.
+import { Browser } from 'puppeteer-core';
 
 export async function convertDocxToPdf(buffer: Buffer): Promise<Buffer> {
     try {
@@ -36,15 +38,33 @@ export async function convertDocxToPdf(buffer: Buffer): Promise<Buffer> {
             </html>
         `;
 
-        // 3. Launch Puppeteer to print PDF
-        // Note: In production (Vercel), this requires @sparticuz/chromium, but for local 'vercel dev' standard puppeteer works.
-        // We'll add a check or try/catch around launch if needed, but assuming local environment for now as requested.
-        const browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox']
-        });
-        const page = await browser.newPage();
+        // 3. Launch Puppeteer
+        let browser: Browser;
 
+        if (process.env.VERCEL) {
+            // Production (Vercel)
+            const chromium = await import('@sparticuz/chromium');
+            const puppeteerCore = await import('puppeteer-core');
+
+            // Optional: Load a custom font if needed (omitted for now)
+
+            browser = await puppeteerCore.default.launch({
+                args: (chromium.default as any).args,
+                defaultViewport: (chromium.default as any).defaultViewport,
+                executablePath: await (chromium.default as any).executablePath(),
+                headless: (chromium.default as any).headless,
+            }) as unknown as Browser;
+
+        } else {
+            // Local Development
+            const puppeteer = await import('puppeteer');
+            browser = await puppeteer.default.launch({
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox']
+            }) as unknown as Browser;
+        }
+
+        const page = await browser.newPage();
         await page.setContent(fullHtml, { waitUntil: 'networkidle0' });
 
         const pdfBuffer = await page.pdf({
@@ -64,6 +84,6 @@ export async function convertDocxToPdf(buffer: Buffer): Promise<Buffer> {
 
     } catch (error) {
         console.error('DOCX Conversion Error:', error);
-        throw new Error('Failed to convert DOCX to PDF. Please ensure the file is valid.');
+        throw new Error('Failed to convert DOCX to PDF.');
     }
 }
