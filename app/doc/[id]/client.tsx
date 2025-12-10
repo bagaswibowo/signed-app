@@ -133,6 +133,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
     const [showSettingsModal, setShowSettingsModal] = useState(false);
     const [settingsStart, setSettingsStart] = useState('');
     const [settingsEnd, setSettingsEnd] = useState('');
+    const [settingsPassword, setSettingsPassword] = useState('');
     const [settingsLoading, setSettingsLoading] = useState(false);
     const [modifiedSignatureIds, setModifiedSignatureIds] = useState<Set<string>>(new Set());
     const [isChecklistMode, setIsChecklistMode] = useState(false);
@@ -295,7 +296,8 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             // We rely on the cookie set during upload, so we don't need to pass the token manually
             // validation happens server-side via cookies
             await updateDocumentSettings(documents[0].id, {
-                expiresAt: settingsEnd ? new Date(settingsEnd).toISOString() : undefined
+                expiresAt: settingsEnd ? new Date(settingsEnd).toISOString() : undefined,
+                password: settingsPassword
             });
 
             alert('Settings saved successfully!');
@@ -659,6 +661,10 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
     };
 
     const handleDownloadPdf = async () => {
+        if (!confirm('Are you sure you want to download the signed PDF?\nPassword for this document (if any) will be deleted.')) {
+            return;
+        }
+
         setIsGenerating(true);
         try {
             // Dynamically import
@@ -1778,29 +1784,33 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             {/* History Sidebar */}
             {
                 showHistory && (
-                    <div className="w-80 bg-white border-l shadow-xl overflow-y-auto animate-in slide-in-from-right">
-                        <div className="p-4 border-b bg-gray-50">
-                            <h2 className="font-semibold text-gray-800 flex items-center">
+                    <div className="fixed top-0 right-0 h-full w-80 bg-white dark:bg-gray-900 border-l dark:border-gray-700 shadow-2xl z-50 overflow-y-auto animate-in slide-in-from-right duration-300">
+                        <div className="p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex items-center justify-between sticky top-0 z-10">
+                            <h2 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center">
                                 <History className="w-4 h-4 mr-2" />
                                 Document History
                             </h2>
+                            <button
+                                onClick={() => setShowHistory(false)}
+                                className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors"
+                            >
+                                <X className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                            </button>
                         </div>
                         <div className="p-4 space-y-6">
                             {/* Document Created Event */}
-                            <div className="relative pl-4 border-l-2 border-gray-200">
+                            <div className="relative pl-4 border-l-2 border-gray-200 dark:border-gray-700">
                                 <div className="absolute -left-[5px] top-0 w-2 h-2 rounded-full bg-gray-400" />
-                                <p className="text-sm font-medium text-gray-800">Documents Uploaded</p>
-                                <p className="text-xs text-gray-500">{formatDate(documents[0].created_at)}</p>
+                                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Documents Uploaded</p>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(documents[0].created_at)}</p>
                             </div>
 
-                            {/* Floating Action Bar REMOVED from here */}
-
-                            {/* Signature Modal */}
+                            {/* Signatures */}
                             {sortedSignatures.map((sig, i) => (
-                                <div key={i} className="relative pl-4 border-l-2 border-blue-200">
+                                <div key={i} className="relative pl-4 border-l-2 border-blue-200 dark:border-blue-900">
                                     <div className="absolute -left-[5px] top-0 w-2 h-2 rounded-full bg-blue-500" />
-                                    <p className="text-sm font-medium text-gray-800">Signed by {sig.name}</p>
-                                    <p className="text-xs text-gray-500">{formatDate(sig.created_at)}</p>
+                                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Signed by {sig.name}</p>
+                                    <p className="text-xs text-gray-500 dark:text-gray-400">{formatDate(sig.created_at)}</p>
                                     <p className="text-xs text-gray-400 mt-1">Page {sig.page}</p>
                                 </div>
                             ))}
@@ -2028,6 +2038,31 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                             onChange={(e) => setSettingsEnd(e.target.value)}
                                             className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
                                         />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                            Password Protection (Optional)
+                                        </label>
+                                        <div className="relative">
+                                            {/* We need to import Lock if not imported, but it is imported as per line 3 */}
+                                            {/* Using styling to position icon */}
+                                            <div className="absolute left-3 top-2.5 pointer-events-none">
+                                                <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                                </svg>
+                                            </div>
+                                            <input
+                                                type="text"
+                                                value={settingsPassword}
+                                                onChange={(e) => setSettingsPassword(e.target.value)}
+                                                className="w-full pl-9 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+                                                placeholder="Set a password to protect this link"
+                                            />
+                                        </div>
+                                        <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">
+                                            Leave empty to remove password protection.
+                                        </p>
                                     </div>
 
                                     <div className="flex justify-end pt-2 gap-2">

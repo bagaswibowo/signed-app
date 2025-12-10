@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS documents (
   starts_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- When the link becomes active
   expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
   owner_token TEXT, -- Token stored in local storage to identify the creator
-  owner_email TEXT -- Optional: to track who uploaded it
+  owner_email TEXT, -- Optional: to track who uploaded it
+  password TEXT -- Optional: password for accessing the document
 );
 
 CREATE TABLE IF NOT EXISTS signers (

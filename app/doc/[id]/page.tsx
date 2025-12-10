@@ -63,6 +63,20 @@ export default async function DocPage({ params }: { params: Promise<{ id: string
         </div>
       );
     }
+
+    // CHECK PASSWORD
+    // If ANY document in the group has a password, we require access token
+    const passwordProtectedDoc = sortedDocuments.find(doc => doc.password);
+    if (passwordProtectedDoc) {
+      // Check for access cookie
+      const accessCookie = cookieStore.get(`doc_access_${passwordProtectedDoc.id}`);
+      if (!accessCookie || accessCookie.value !== 'granted') {
+        // Import PasswordPrompt dynamically? No, server components import normally.
+        // We need to import it at top level if not already
+        const { default: PasswordPrompt } = await import('@/components/PasswordPrompt');
+        return <PasswordPrompt documentId={passwordProtectedDoc.id} />;
+      }
+    }
   }
 
   // Fetch all signatures for these documents

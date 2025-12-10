@@ -13,6 +13,7 @@ async function run() {
             const { sql } = await import('@vercel/postgres');
             await sql`ALTER TABLE documents ADD COLUMN IF NOT EXISTS starts_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP`;
             await sql`ALTER TABLE documents ADD COLUMN IF NOT EXISTS owner_token TEXT`;
+            await sql`ALTER TABLE documents ADD COLUMN IF NOT EXISTS password TEXT`;
             console.log('Columns added successfully');
         } catch (e) {
             console.log('Columns might already exist or error:', e);

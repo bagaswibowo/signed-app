@@ -159,6 +159,9 @@ export async function generateSignedPdf(documentId: string, editorOptions?: {
             access: 'public',
         });
 
+        // 7. Clear password (Auto-delete requirement)
+        await sql`UPDATE documents SET password = NULL WHERE id = ${documentId}`;
+
         return { url: blob.url };
     } catch (error) {
         console.error('Error generating PDF:', error);
@@ -226,6 +229,11 @@ export async function generateSignedZip(documentIds: string[]) {
         const blob = await put(`signed-documents-${Date.now()}.zip`, zipContent, {
             access: 'public',
         });
+
+        // 7. Clear passwords (Auto-delete requirement)
+        for (const docId of documentIds) {
+            await sql`UPDATE documents SET password = NULL WHERE id = ${docId}`;
+        }
 
         return { url: blob.url };
 
@@ -349,7 +357,7 @@ export async function uploadDocument(formData: FormData) {
     return { success: true, documentId, url: blob.url, pageCount, ownerToken };
 }
 
-export async function updateDocumentSettings(documentId: string, settings: { startsAt?: string; expiresAt?: string }, ownerToken?: string) {
+export async function updateDocumentSettings(documentId: string, settings: { startsAt?: string; expiresAt?: string; password?: string }, ownerToken?: string) {
     try {
         // 1. Verify access
         // Check cookie first if no token provided (robustness)
@@ -373,6 +381,10 @@ export async function updateDocumentSettings(documentId: string, settings: { sta
         }
         if (settings.expiresAt) {
             await sql`UPDATE documents SET expires_at = ${settings.expiresAt} WHERE id = ${documentId}`;
+        }
+        if (settings.password !== undefined) {
+            // Allow setting empty string to clear password
+            await sql`UPDATE documents SET password = ${settings.password || null} WHERE id = ${documentId}`;
         }
 
         revalidatePath(`/doc/${documentId}`);
@@ -605,9 +617,15 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
 
         // 4. Save and Upload
         const pdfBytes = await newPdf.save();
-        const blob = await put(`signed-merged-${Date.now()}.pdf`, Buffer.from(pdfBytes), {
+        const blob = await put(`signed-combined-${Date.now()}.pdf`, Buffer.from(pdfBytes), {
             access: 'public',
         });
+
+        // 3. Clear passwords (Auto-delete requirement)
+        const uniqueDocIds = new Set(virtualPages.map(vp => vp.docId));
+        for (const docId of uniqueDocIds) {
+            await sql`UPDATE documents SET password = NULL WHERE id = ${docId}`;
+        }
 
         return { url: blob.url };
 
@@ -666,5 +684,30 @@ export async function regenerateDocumentLink(documentId: string) {
     } catch (error) {
         console.error('Error regenerating link:', error);
         throw new Error('Failed to regenerate link');
+    }
+}
+
+export async function verifyDocumentPassword(documentId: string, password: string) {
+    try {
+        const docResult = await sql`SELECT password FROM documents WHERE id = ${documentId}`;
+        if (docResult.rows.length === 0) return { success: false, error: 'Document not found' };
+
+        const storedPassword = docResult.rows[0].password;
+        if (storedPassword === password) {
+            // Set access cookie
+            const cookieStore = await cookies();
+            cookieStore.set(`doc_access_${documentId}`, 'granted', {
+                secure: process.env.NODE_ENV === 'production',
+                httpOnly: true,
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 // 1 day
+            });
+            return { success: true };
+        } else {
+            return { success: false, error: 'Incorrect password' };
+        }
+    } catch (error) {
+        console.error('Password verification failed:', error);
+        return { success: false, error: 'Verification failed' };
     }
 }
