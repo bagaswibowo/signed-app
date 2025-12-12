@@ -13,22 +13,26 @@ const TabsContext = React.createContext<{
 const Tabs = React.forwardRef<
     HTMLDivElement,
     React.HTMLAttributes<HTMLDivElement> & {
-        defaultValue: string
+        defaultValue?: string
+        value?: string
         onValueChange?: (value: string) => void
     }
->(({ className, defaultValue, onValueChange, children, ...props }, ref) => {
-    const [value, setValue] = React.useState(defaultValue)
+>(({ className, defaultValue, value: controlledValue, onValueChange, children, ...props }, ref) => {
+    const [value, setValue] = React.useState(defaultValue || "")
+    const currentValue = controlledValue !== undefined ? controlledValue : value
 
     const handleValueChange = React.useCallback(
         (newValue: string) => {
-            setValue(newValue)
+            if (controlledValue === undefined) {
+                setValue(newValue)
+            }
             onValueChange?.(newValue)
         },
-        [onValueChange]
+        [onValueChange, controlledValue]
     )
 
     return (
-        <TabsContext.Provider value={{ value, onValueChange: handleValueChange }}>
+        <TabsContext.Provider value={{ value: currentValue, onValueChange: handleValueChange }}>
             <div ref={ref} className={cn("", className)} {...props}>
                 {children}
             </div>
