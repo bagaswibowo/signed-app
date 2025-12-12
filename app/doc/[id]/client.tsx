@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, Fragment } from 'react';
+import React, { useState, useRef, useEffect, Fragment } from 'react';
+import { useRouter } from 'next/navigation';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Rnd } from 'react-rnd';
 import SignatureCanvas from 'react-signature-canvas';
@@ -20,6 +21,7 @@ import {
     X,
     Loader2,
     Check,
+    ShieldCheck,
     Upload as UploadIcon,
     Moon,
     Sun,
@@ -48,6 +50,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { addSignatures, generateSignedPdf, deleteSignature, updateSignature, deleteDocument, generateSignedZip, updateDocumentSettings } from '@/app/actions';
@@ -70,6 +73,7 @@ interface ClientSigningPageProps {
 
 // Annotation Types
 export type AnnotationType = 'image' | 'text' | 'rect' | 'circle' | 'line' | 'draw' | 'highlight';
+
 
 export interface AnnotationStyle {
     strokeColor?: string;
@@ -102,6 +106,7 @@ interface Signature {
 
 export default function ClientSigningPage({ documents, existingSignatures, signer, isOwner: initialIsOwner = false }: ClientSigningPageProps) {
     // Map of docId -> numPages
+    const router = useRouter();
     const [numPagesMap, setNumPagesMap] = useState<Record<string, number>>({});
     const [localDocuments, setLocalDocuments] = useState<any[]>(documents); // Initialize with prop
     const [scale, setScale] = useState(1.0);
@@ -129,6 +134,8 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
     const [showHistory, setShowHistory] = useState(false);
     const [copied, setCopied] = useState(false);
     const [signatureData, setSignatureData] = useState('');
+    const [uploadedSignatureImage, setUploadedSignatureImage] = useState<string | null>(null);
+
     const [localSignatures, setLocalSignatures] = useState<Signature[]>(existingSignatures);
 
     // Initialize isOwner from prop, fallback to false (localStorage check will run in useEffect)
@@ -137,11 +144,11 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
     const [settingsStart, setSettingsStart] = useState('');
     const [settingsEnd, setSettingsEnd] = useState('');
     const [settingsPassword, setSettingsPassword] = useState('');
+    const [settingsSlug, setSettingsSlug] = useState('');
     const [settingsLoading, setSettingsLoading] = useState(false);
     const [modifiedSignatureIds, setModifiedSignatureIds] = useState<Set<string>>(new Set());
     const [isChecklistMode, setIsChecklistMode] = useState(false);
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
-    const [uploadedSignatureImage, setUploadedSignatureImage] = useState<string | null>(null);
     const [nameError, setNameError] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
@@ -201,6 +208,11 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
         setLocalSignatures(existingSignatures);
     }, [existingSignatures]);
 
+    // Sync localDocuments with props (for router.refresh())
+    useEffect(() => {
+        setLocalDocuments(documents);
+    }, [documents]);
+
     // Resize observer to fit PDF to screen width
     useEffect(() => {
         const updateScale = () => {
@@ -215,6 +227,16 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
         window.addEventListener('resize', updateScale);
         return () => window.removeEventListener('resize', updateScale);
     }, []);
+
+    // Initialize settings from doc
+    useEffect(() => {
+        if (localDocuments.length > 0) {
+            const doc = localDocuments[0];
+            if (doc.starts_at) setSettingsStart(new Date(doc.starts_at).toISOString().slice(0, 16));
+            if (doc.expires_at) setSettingsEnd(new Date(doc.expires_at).toISOString().slice(0, 16));
+            if (doc.slug) setSettingsSlug(doc.slug);
+        }
+    }, [localDocuments]);
 
     function formatFilename(url: string): string {
         try {
@@ -304,11 +326,13 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             // validation happens server-side via cookies
             await updateDocumentSettings(documents[0].id, {
                 expiresAt: settingsEnd ? new Date(settingsEnd).toISOString() : undefined,
-                password: settingsPassword
+                password: settingsPassword,
+                slug: settingsSlug
             });
 
-            alert('Settings saved successfully!');
+            // alert('Settings saved successfully!'); // Removed for smoother UX
             setShowSettingsModal(false);
+            router.refresh(); // Update props without reload
         } catch (error) {
             console.error('Failed to save settings:', error);
             alert('Failed to save settings. You may not be the owner.');
@@ -800,7 +824,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     const index = currentIds.indexOf(docId);
                     if (index !== -1) {
                         currentIds[index] = result.documentId;
-                        window.location.href = `/doc/${currentIds.join(',')}`;
+                        router.push(`/doc/${currentIds.join(',')}`);
                     }
                 }
             } catch (error) {
@@ -836,10 +860,11 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             const newIds = currentIds.filter(id => id !== idToDelete);
 
             if (newIds.length === 0) {
-                window.location.href = '/';
+                router.push('/');
             } else {
-                window.location.href = `/doc/${newIds.join(',')}`;
+                router.push(`/doc/${newIds.join(',')}`);
             }
+            router.refresh();
         } catch (error) {
             console.error('Failed to delete document:', error);
             alert('Failed to delete document');
@@ -2009,15 +2034,15 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             {/* Share & Settings Modal */}
             {showSettingsModal && (
                 <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-800">
+                    <div className="bg-card text-card-foreground rounded-xl shadow-2xl p-6 w-full max-w-md border border-border">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-xl font-semibold flex items-center gap-2">
-                                <Share2 className="w-5 h-5 text-blue-600" />
+                                <Share2 className="w-5 h-5 text-primary" />
                                 Share Document
                             </h2>
-                            <button onClick={() => setShowSettingsModal(false)} className="text-gray-400 hover:text-gray-600">
+                            <Button variant="ghost" size="icon" onClick={() => setShowSettingsModal(false)} className="text-muted-foreground hover:text-foreground">
                                 <X className="w-5 h-5" />
-                            </button>
+                            </Button>
                         </div>
 
                         <div className="space-y-6">
@@ -2027,18 +2052,36 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     Document Link
                                 </label>
                                 <div className="flex gap-2">
-                                    <input
+                                    <Input
                                         readOnly
-                                        value={window.location.href}
-                                        className="flex-1 p-2 text-sm bg-slate-50 dark:bg-slate-800 border border-gray-300 dark:border-gray-700 rounded-md text-slate-600 dark:text-slate-300"
+                                        value={documents[0]?.slug ? `${typeof window !== 'undefined' ? window.location.origin : ''}/s/${documents[0].slug}` : (typeof window !== 'undefined' ? window.location.href : '')}
+                                        className="flex-1 bg-muted text-muted-foreground"
                                     />
-                                    <button
-                                        onClick={handleShare}
-                                        className="p-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md transition-colors dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50"
+                                    <Button
+                                        variant="secondary"
+                                        size="icon"
+                                        onClick={() => {
+                                            const url = documents[0]?.slug
+                                                ? `${window.location.origin}/s/${documents[0].slug}`
+                                                : window.location.href;
+                                            navigator.clipboard.writeText(url);
+                                            setCopied(true);
+                                            setTimeout(() => setCopied(false), 2000);
+                                        }}
                                         title="Copy Link"
                                     >
                                         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                                    </button>
+                                    </Button>
+                                </div>
+                                <div className="mt-2 text-xs">
+                                    <a
+                                        href={`/verify/${documents[0]?.id}`}
+                                        target="_blank"
+                                        className="text-primary hover:underline flex items-center gap-1"
+                                    >
+                                        <ShieldCheck className="w-3 h-3" />
+                                        Verify Integrity
+                                    </a>
                                 </div>
                             </div>
 
@@ -2052,64 +2095,82 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                         Access Settings
                                     </h3>
 
+                                    <div>
+                                        <label className="block text-sm font-medium text-foreground mb-1">
+                                            Custom Link / Shortlink (Optional)
+                                        </label>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm text-muted-foreground">{typeof window !== 'undefined' ? window.location.origin : ''}/s/</span>
+                                            <Input
+                                                type="text"
+                                                value={settingsSlug}
+                                                onChange={(e) => setSettingsSlug(e.target.value)}
+                                                className="flex-1"
+                                                placeholder="custom-name"
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Create a short, memorable link for this document.
+                                        </p>
+                                    </div>
+
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        <label className="block text-sm font-medium text-foreground mb-1">
                                             Expiry Time (Active Until)
                                         </label>
-                                        <input
+                                        <Input
                                             type="datetime-local"
                                             value={settingsEnd}
                                             onChange={(e) => setSettingsEnd(e.target.value)}
-                                            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+                                            className="w-full"
                                         />
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        <label className="block text-sm font-medium text-foreground mb-1">
                                             Password Protection (Optional)
                                         </label>
                                         <div className="relative">
                                             {/* We need to import Lock if not imported, but it is imported as per line 3 */}
                                             {/* Using styling to position icon */}
-                                            <div className="absolute left-3 top-2.5 pointer-events-none">
+                                            <div className="absolute left-3 top-2.5 pointer-events-none z-10">
                                                 <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                                 </svg>
                                             </div>
-                                            <input
+                                            <Input
                                                 type="text"
                                                 value={settingsPassword}
                                                 onChange={(e) => setSettingsPassword(e.target.value)}
-                                                className="w-full pl-9 p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
+                                                className="w-full pl-9"
                                                 placeholder="Set a password to protect this link"
                                             />
                                         </div>
-                                        <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">
+                                        <p className="text-xs text-muted-foreground mt-1">
                                             Leave empty to remove password protection.
                                         </p>
                                     </div>
 
                                     <div className="flex justify-end pt-2 gap-2">
-                                        <button
+                                        <Button
+                                            variant="destructive"
                                             onClick={async () => {
                                                 setIsRegenerateDialogOpen(true);
                                             }}
                                             disabled={settingsLoading}
-                                            className="px-3 py-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg text-sm flex items-center gap-2 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/40"
                                         >
-                                            <RefreshCw className="w-4 h-4" />
+                                            <RefreshCw className="w-4 h-4 mr-2" />
                                             Regenerate Link
-                                        </button>
+                                        </Button>
 
-                                        <button
+                                        <Button
                                             onClick={handleSettingsSave}
                                             disabled={settingsLoading}
-                                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
                                         >
-                                            {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                            {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                                             Save Settings
-                                        </button>
+                                        </Button>
                                     </div>
                                 </div>
                             ) : (
@@ -2179,7 +2240,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     const { regenerateDocumentLink } = await import('@/app/actions');
                                     const res = await regenerateDocumentLink(documents[0].id);
                                     if (res.newDocumentId) {
-                                        window.location.href = `/doc/${res.newDocumentId}`;
+                                        router.push(`/doc/${res.newDocumentId}`);
                                     }
                                 } catch (e) {
                                     alert('Failed to regenerate link');

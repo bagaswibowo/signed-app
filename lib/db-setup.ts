@@ -7,6 +7,7 @@ export async function createTable() {
       CREATE TABLE IF NOT EXISTS documents (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         url TEXT NOT NULL,
+        slug TEXT UNIQUE,
         signed_url TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
         expires_at TIMESTAMP WITH TIME ZONE NOT NULL,

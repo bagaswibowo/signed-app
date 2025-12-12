@@ -151,16 +151,142 @@ export async function generateSignedPdf(documentId: string, editorOptions?: {
             }
         }
 
-        // 5. Save PDF
+        // Generate Integrity ID for Tamper Detection (Scoped at function level)
+        const { randomUUID } = await import('crypto');
+        const integrityId = randomUUID();
+
+        // 4.5 Add Footer to the LAST PAGE of Original Document (Divider + QR + ID)
+        const pages = pdfDoc.getPages();
+        if (pages.length > 0) {
+            const lastPage = pages[pages.length - 1];
+            const { width: pageWidth, height: pageHeight } = lastPage.getSize();
+            const { default: QRCode } = await import('qrcode');
+            const { StandardFonts, rgb } = await import('pdf-lib');
+
+            const footerFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://signed-app.vercel.app';
+            const verificationUrl = `${baseUrl}/verify/${documentId}?integrity=${integrityId}`;
+            const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
+            const qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
+
+            // Divider Line
+            lastPage.drawLine({
+                start: { x: 40, y: 80 },
+                end: { x: pageWidth - 40, y: 80 },
+                thickness: 1,
+                color: rgb(0.8, 0.8, 0.8), // Light gray
+            });
+
+            // QR Code (Bottom Left)
+            lastPage.drawImage(qrCodeImage, {
+                x: 40,
+                y: 20,
+                width: 50,
+                height: 50,
+            });
+
+            // Document Info Text
+            lastPage.drawText(`Document ID: ${documentId}`, {
+                x: 100,
+                y: 55,
+                size: 9,
+                font: footerFont,
+                color: rgb(0.4, 0.4, 0.4),
+            });
+            lastPage.drawText(`Digitally Signed & Verified via SignedApp`, {
+                x: 100,
+                y: 40,
+                size: 8,
+                font: footerFont,
+                color: rgb(0.5, 0.5, 0.5),
+            });
+            lastPage.drawText(`Scan to verify authenticity`, {
+                x: 100,
+                y: 28,
+                size: 8,
+                font: footerFont,
+                color: rgb(0.6, 0.6, 0.6),
+            });
+        }
+
+        // 5. Generate Certificate of Completion
+        const { default: QRCode } = await import('qrcode');
+        const certificatePage = pdfDoc.addPage();
+        const { width: certWidth, height: certHeight } = certificatePage.getSize();
+        const font = await pdfDoc.embedFont((await import('pdf-lib')).StandardFonts.Helvetica);
+        const boldFont = await pdfDoc.embedFont((await import('pdf-lib')).StandardFonts.HelveticaBold);
+
+        // -- Certificate Header --
+        certificatePage.drawText('Certificate of Completion', { x: 50, y: certHeight - 80, size: 24, font: boldFont });
+        certificatePage.drawText(`Document ID: ${documentId}`, { x: 50, y: certHeight - 110, size: 12, font });
+        certificatePage.drawText(`Date: ${new Date().toISOString()}`, { x: 50, y: certHeight - 125, size: 12, font });
+
+        // -- QR Code -- 
+        // Verification Link (Using same integrity ID)
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.com';
+        const verificationUrl = `${baseUrl}/verify/${documentId}?integrity=${integrityId}`;
+        const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
+        const qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
+        certificatePage.drawImage(qrCodeImage, {
+            x: certWidth - 150,
+            y: certHeight - 150,
+            width: 100,
+            height: 100,
+        });
+        certificatePage.drawText('Scan to Verify', { x: certWidth - 138, y: certHeight - 165, size: 10, font });
+
+
+        // -- Audit Trail Summary --
+        let yPos = certHeight - 200;
+        certificatePage.drawText('Audit Log', { x: 50, y: yPos, size: 16, font: boldFont });
+        yPos -= 25;
+
+        // Fetch Audit Logs
+        const auditResult = await sql`SELECT * FROM audit_logs WHERE document_id = ${documentId} ORDER BY created_at ASC`;
+        const auditLogs = auditResult.rows;
+
+        for (const log of auditLogs) {
+            const dateStr = new Date(log.created_at).toLocaleString();
+            const actionStr = `${log.action.toUpperCase()} by ${log.actor_email || 'Anonymous'}`;
+            certificatePage.drawText(`${dateStr} - ${actionStr}`, { x: 50, y: yPos, size: 10, font });
+            yPos -= 15;
+
+            if (yPos < 50) {
+                // Simple pagination check (add new page if needed, but for MVP one page likely enough)
+                // Just stop if full
+                break;
+            }
+        }
+
+        // -- Digital Stamper --
+        yPos -= 30;
+        certificatePage.drawText('Digitally Signed by SignedApp', { x: 50, y: yPos, size: 12, font: boldFont, color: (await import('pdf-lib')).rgb(0, 0, 1) });
+        certificatePage.drawLine({
+            start: { x: 50, y: yPos - 5 },
+            end: { x: 300, y: yPos - 5 },
+            thickness: 1,
+            color: (await import('pdf-lib')).rgb(0, 0, 1),
+        });
+
+        // 6. Save PDF
         const pdfBytes = await pdfDoc.save();
 
-        // 6. Upload to Blob
+        // 7. Compute Hash for Integrity
+        const { createHash } = await import('crypto');
+        const hash = createHash('sha256').update(Buffer.from(pdfBytes)).digest('hex');
+
+        // 8. Upload to Blob
         const blob = await put(`signed-${documentId}.pdf`, Buffer.from(pdfBytes), {
             access: 'public',
         });
 
-        // 7. Clear password (Auto-delete requirement)
-        await sql`UPDATE documents SET password = NULL WHERE id = ${documentId}`;
+        // 9. Update Document Record (Hash, Completed At, Clear Password)
+        await sql`
+            UPDATE documents 
+            SET password = NULL, verification_hash = ${hash}, completed_at = NOW(), integrity_id = ${integrityId}
+            WHERE id = ${documentId}
+        `;
 
         return { url: blob.url };
     } catch (error) {
@@ -357,7 +483,7 @@ export async function uploadDocument(formData: FormData) {
     return { success: true, documentId, url: blob.url, pageCount, ownerToken };
 }
 
-export async function updateDocumentSettings(documentId: string, settings: { startsAt?: string; expiresAt?: string; password?: string }, ownerToken?: string) {
+export async function updateDocumentSettings(documentId: string, settings: { startsAt?: string; expiresAt?: string; password?: string; slug?: string }, ownerToken?: string) {
     try {
         // 1. Verify access
         // Check cookie first if no token provided (robustness)
@@ -385,6 +511,25 @@ export async function updateDocumentSettings(documentId: string, settings: { sta
         if (settings.password !== undefined) {
             // Allow setting empty string to clear password
             await sql`UPDATE documents SET password = ${settings.password || null} WHERE id = ${documentId}`;
+        }
+
+        if (settings.slug !== undefined) {
+            let slugToSet = settings.slug?.trim() || null;
+            if (slugToSet === '') slugToSet = null;
+
+            if (slugToSet) {
+                // Validate format (alphanumeric and dashes only)
+                if (!/^[a-zA-Z0-9-]+$/.test(slugToSet)) {
+                    throw new Error('Invalid slug format. Use letters, numbers, and dashes only.');
+                }
+
+                // Check uniqueness
+                const existing = await sql`SELECT id FROM documents WHERE slug = ${slugToSet} AND id != ${documentId}`;
+                if (existing.rows.length > 0) {
+                    throw new Error('This link is already taken. Please choose another one.');
+                }
+            }
+            await sql`UPDATE documents SET slug = ${slugToSet} WHERE id = ${documentId}`;
         }
 
         revalidatePath(`/doc/${documentId}`);
@@ -461,7 +606,9 @@ export interface VirtualPage {
 
 export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
     try {
-        const { PDFDocument, rgb } = await import('pdf-lib');
+        const { PDFDocument, rgb, StandardFonts } = await import('pdf-lib');
+        const { default: QRCode } = await import('qrcode');
+        const { createHash, randomUUID } = await import('crypto');
 
         // Helper to convert hex to pdf-lib Color
         const hexToRgb = (hex: string) => {
@@ -475,6 +622,9 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
 
         const newPdf = await PDFDocument.create();
         const docCache: Record<string, typeof PDFDocument.prototype> = {};
+
+        // Generate Integrity ID for Tamper Detection
+        const integrityId = randomUUID();
 
         // 1. Iterate through virtual pages and assemble
         for (const vPage of virtualPages) {
@@ -493,7 +643,17 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
 
             // Copy the page
             // pageIndex is 1-based, copyPages expects 0-based indices
+            if (vPage.pageIndex < 1 || vPage.pageIndex > sourceDoc.getPageCount()) {
+                console.error(`Invalid page index ${vPage.pageIndex} for doc ${vPage.docId}`);
+                continue;
+            }
+
             const [copiedPage] = await newPdf.copyPages(sourceDoc, [vPage.pageIndex - 1]);
+
+            if (vPage.rotation) {
+                const currentRotation = copiedPage.getRotation().angle;
+                copiedPage.setRotation((currentRotation + vPage.rotation) % 360 as any);
+            }
 
             // 2. Embed Signatures and Annotations for this specific page
             const sigResult = await sql`
@@ -503,8 +663,6 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
 
             for (const sig of sigResult.rows) {
                 const { height: pageHeight } = copiedPage.getSize();
-                // Coordinates in pdf-lib are from bottom-left
-                // sig.y is from top-left.
                 const pdfY = pageHeight - sig.y - sig.height;
 
                 // Try to parse data as JSON for Shape/Text annotations
@@ -522,21 +680,19 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
                     const { type, style, text } = annotationData;
                     const strokeColor = style?.strokeColor ? hexToRgb(style.strokeColor) : undefined;
                     const fillColor = style?.fillColor && style.fillColor !== 'transparent' ? hexToRgb(style.fillColor) : undefined;
-                    // Note: pdf-lib uses [0..1] for colors if using rgb(), or [0..255] if custom helper.
-                    // Let's assume hexToRgb returns pdf-lib Color object or we use basic colors.
+                    const strokeWidth = style?.strokeWidth || 2;
 
                     if (type === 'rect') {
                         copiedPage.drawRectangle({
                             x: sig.x,
-                            y: pageHeight - sig.y - sig.height, // Y is bottom-left of rect
+                            y: pageHeight - sig.y - sig.height, // Bottom-left
                             width: sig.width,
                             height: sig.height,
                             borderColor: strokeColor,
-                            borderWidth: style?.strokeWidth || 2,
+                            borderWidth: strokeWidth,
                             color: fillColor,
                         });
                     } else if (type === 'circle') {
-                        // drawEllipse expects center x,y and xRadius, yRadius
                         const xRadius = sig.width / 2;
                         const yRadius = sig.height / 2;
                         copiedPage.drawEllipse({
@@ -545,86 +701,194 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
                             xScale: xRadius,
                             yScale: yRadius,
                             borderColor: strokeColor,
-                            borderWidth: style?.strokeWidth || 2,
+                            borderWidth: strokeWidth,
                             color: fillColor,
                         });
                     } else if (type === 'text') {
                         const fontSize = style?.fontSize || 16;
-                        // For text, y is usually baseline. pdf-lib drawText y is baseline.
-                        // Our sig.y is top of element.
-                        // Rough adjustment: y - fontSize? 
-                        // Actually drawText y is bottom-left of text line.
-
-                        // We need a font. Standard font for now.
                         const font = await newPdf.embedFont('Helvetica');
-
                         copiedPage.drawText(text || '', {
                             x: sig.x,
-                            y: pageHeight - sig.y - (fontSize * 0.8), // Approx baseline from top
+                            y: pageHeight - sig.y - fontSize, // Approx baseline
                             size: fontSize,
                             font: font,
                             color: strokeColor,
                         });
-                    } else if (type === 'draw' && annotationData.path) {
-                        // SVG Path for Drawing
-                        // If we have points, regenerate path with Y flipped to avoid scale type error
-                        let pathForPdf = annotationData.path;
-                        let scaleForPdf = 1;
-                        // Actually, flipping Y means y' = -y.
-                        // And we might need to offset if origin is different?
-                        // If we draw relative to (x, pageHeight - y), we are at top-left of bbox.
-                        // (10, 10) should be (10, -10).
+                    } else if (type === 'draw') {
+                        if (annotationData.points && annotationData.points.length > 0) {
+                            const pathPoints: { x: number, y: number }[] = annotationData.points;
+                            const pathScaleX = sig.width / (annotationData.originalWidth || sig.width);
+                            const pathScaleY = sig.height / (annotationData.originalHeight || sig.height);
 
-                        if (annotationData.points) {
-                            const points = annotationData.points as { x: number, y: number }[];
-                            pathForPdf = `M ${points[0].x} ${-points[0].y} ` +
-                                points.slice(1).map(p => `L ${p.x} ${-p.y}`).join(' ');
+                            for (let i = 0; i < pathPoints.length - 1; i++) {
+                                const p1 = pathPoints[i];
+                                const p2 = pathPoints[i + 1];
+
+                                const x1 = sig.x + (p1.x * pathScaleX);
+                                const y1 = pageHeight - (sig.y + (p1.y * pathScaleY));
+                                const x2 = sig.x + (p2.x * pathScaleX);
+                                const y2 = pageHeight - (sig.y + (p2.y * pathScaleY));
+
+                                copiedPage.drawLine({
+                                    start: { x: x1, y: y1 },
+                                    end: { x: x2, y: y2 },
+                                    thickness: strokeWidth,
+                                    color: strokeColor || rgb(0, 0, 0),
+                                });
+                            }
                         }
-
-                        copiedPage.drawSvgPath(pathForPdf, {
-                            x: sig.x,
-                            y: pageHeight - sig.y, // Top of bbox
-                            scale: scaleForPdf,
-                            borderColor: strokeColor,
-                            borderWidth: style?.strokeWidth || 2,
-                        });
                     }
                 } else {
-                    // Legacy Image Handler
+                    // Image signature (Legacy or new image)
                     let signatureImage;
                     if (sig.data.startsWith('data:image/jpeg') || sig.data.startsWith('data:image/jpg')) {
                         signatureImage = await newPdf.embedJpg(sig.data);
-                    } else {
-                        // Fallback for png or unknown
+                    } else if (sig.data.startsWith('data:image/png')) {
                         signatureImage = await newPdf.embedPng(sig.data);
+                    } else {
+                        // Attempt png fallback or skip
+                        try {
+                            signatureImage = await newPdf.embedPng(sig.data);
+                        } catch (e) {
+                            console.warn('Failed to embed image signature', e);
+                            continue;
+                        }
                     }
 
-                    copiedPage.drawImage(signatureImage, {
-                        x: sig.x,
-                        y: pageHeight - sig.y - sig.height,
-                        width: sig.width,
-                        height: sig.height,
-                    });
+                    if (signatureImage) {
+                        copiedPage.drawImage(signatureImage, {
+                            x: sig.x,
+                            y: pdfY,
+                            width: sig.width,
+                            height: sig.height,
+                        });
+                    }
                 }
             }
-
-            // 3. Apply Rotation (Add to existing rotation)
-            const currentRotation = copiedPage.getRotation().angle;
-            copiedPage.setRotation((currentRotation + vPage.rotation) % 360 as any);
 
             newPdf.addPage(copiedPage);
         }
 
-        // 4. Save and Upload
+        // 3. Add Footer to the LAST PAGE (Divider + QR + ID)
+        const pages = newPdf.getPages();
+        if (pages.length > 0) {
+            const lastPage = pages[pages.length - 1];
+            const { width: pageWidth, height: pageHeight } = lastPage.getSize();
+            const mainDocId = virtualPages[0]?.docId; // Use primary doc ID
+
+            if (mainDocId) {
+                const footerFont = await newPdf.embedFont(StandardFonts.Helvetica);
+
+                const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://signed-app.vercel.app';
+                const verificationUrl = `${baseUrl}/verify/${mainDocId}?integrity=${integrityId}`;
+                const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
+                const qrCodeImage = await newPdf.embedPng(qrCodeDataUrl);
+
+                // Divider Line
+                lastPage.drawLine({
+                    start: { x: 40, y: 80 },
+                    end: { x: pageWidth - 40, y: 80 },
+                    thickness: 1,
+                    color: rgb(0.8, 0.8, 0.8), // Light gray
+                });
+
+                // QR Code (Bottom Left)
+                lastPage.drawImage(qrCodeImage, {
+                    x: 40,
+                    y: 20,
+                    width: 50,
+                    height: 50,
+                });
+
+                // Document Info Text
+                lastPage.drawText(`Document ID: ${mainDocId}`, {
+                    x: 100,
+                    y: 55,
+                    size: 9,
+                    font: footerFont,
+                    color: rgb(0.4, 0.4, 0.4),
+                });
+                lastPage.drawText(`Digitally Signed & Verified via SignedApp`, {
+                    x: 100,
+                    y: 40,
+                    size: 8,
+                    font: footerFont,
+                    color: rgb(0.5, 0.5, 0.5),
+                });
+                lastPage.drawText(`Scan to verify authenticity`, {
+                    x: 100,
+                    y: 28,
+                    size: 8,
+                    font: footerFont,
+                    color: rgb(0.6, 0.6, 0.6),
+                });
+            }
+        }
+
+        // 4. Append Certificate of Completion Page
+        const mainDocId = virtualPages[0]?.docId;
+        if (mainDocId) {
+            const certificatePage = newPdf.addPage();
+            const { width: certWidth, height: certHeight } = certificatePage.getSize();
+            const font = await newPdf.embedFont(StandardFonts.Helvetica);
+            const boldFont = await newPdf.embedFont(StandardFonts.HelveticaBold);
+
+            certificatePage.drawText('Certificate of Completion', { x: 50, y: certHeight - 80, size: 24, font: boldFont });
+            certificatePage.drawText(`Document ID: ${mainDocId}`, { x: 50, y: certHeight - 110, size: 12, font });
+            certificatePage.drawText(`Date: ${new Date().toISOString()}`, { x: 50, y: certHeight - 125, size: 12, font });
+
+            // QR Code
+            const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://signed-app.vercel.app';
+            const verificationUrl = `${baseUrl}/verify/${mainDocId}?integrity=${integrityId}`;
+            const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
+            const qrCodeImage = await newPdf.embedPng(qrCodeDataUrl);
+
+            certificatePage.drawImage(qrCodeImage, {
+                x: certWidth - 150,
+                y: certHeight - 150,
+                width: 100,
+                height: 100,
+            });
+
+            // Audit Logs
+            let yPos = certHeight - 200;
+            certificatePage.drawText('Audit Log', { x: 50, y: yPos, size: 16, font: boldFont });
+            yPos -= 25;
+
+            const auditResult = await sql`SELECT * FROM audit_logs WHERE document_id = ${mainDocId} ORDER BY created_at ASC LIMIT 20`;
+            for (const log of auditResult.rows) {
+                const dateStr = new Date(log.created_at).toLocaleString();
+                const actionStr = `${log.action.toUpperCase()} by ${log.actor_email || 'Anonymous'}`;
+                certificatePage.drawText(`${dateStr} - ${actionStr}`, { x: 50, y: yPos, size: 10, font });
+                yPos -= 15;
+            }
+        }
+
+
+        // 5. Save and Upload
         const pdfBytes = await newPdf.save();
         const blob = await put(`signed-combined-${Date.now()}.pdf`, Buffer.from(pdfBytes), {
             access: 'public',
         });
 
-        // 3. Clear passwords (Auto-delete requirement)
+        // 6. Compute Hash & Update DB
+        if (mainDocId) {
+            const hash = createHash('sha256').update(Buffer.from(pdfBytes)).digest('hex');
+            // 8. Update Document Record (Use same integrityId generated above)
+            // Use mainDocId for update
+            await sql`
+                UPDATE documents 
+                SET password = NULL, verification_hash = ${hash}, completed_at = NOW(), integrity_id = ${integrityId}
+                WHERE id = ${mainDocId}
+            `;
+        }
+
+        // Clear passwords for all involved docs
         const uniqueDocIds = new Set(virtualPages.map(vp => vp.docId));
         for (const docId of uniqueDocIds) {
-            await sql`UPDATE documents SET password = NULL WHERE id = ${docId}`;
+            if (docId !== mainDocId) { // mainDocId already handled
+                await sql`UPDATE documents SET password = NULL WHERE id = ${docId}`;
+            }
         }
 
         return { url: blob.url };

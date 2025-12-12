@@ -1,6 +1,8 @@
 import { sql } from '@vercel/postgres';
 import { notFound } from 'next/navigation';
+import { cookies } from 'next/headers';
 import SigningPageWrapper from '@/app/doc/[id]/wrapper';
+import PasswordPrompt from '@/components/PasswordPrompt';
 
 export default async function SignerPage({ params }: { params: Promise<{ token: string }> }) {
     const { token } = await params;
@@ -18,6 +20,15 @@ export default async function SignerPage({ params }: { params: Promise<{ token: 
         notFound();
     }
     const document = docResult.rows[0];
+
+    // 2.1 Check Password Protection
+    if (document.password) {
+        const cookieStore = await cookies();
+        const accessCookie = cookieStore.get(`doc_access_${document.id}`);
+        if (!accessCookie || accessCookie.value !== 'granted') {
+            return <PasswordPrompt documentId={document.id} />;
+        }
+    }
 
     // 3. Get existing signatures
     const sigResult = await sql`SELECT * FROM signatures WHERE document_id = ${signer.document_id}`;

@@ -24,6 +24,14 @@ export default function LandingPage() {
   const [uploads, setUploads] = useState<UploadItem[]>([]);
   const router = useRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [verifyId, setVerifyId] = useState('');
+
+  const handleVerify = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (verifyId.trim()) {
+      router.push(`/verify/${verifyId.trim()}`);
+    }
+  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -136,6 +144,7 @@ export default function LandingPage() {
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600 dark:text-slate-400">
             <a href="#features" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Features</a>
             <a href="#how-it-works" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">How it works</a>
+            <a href="#verify-section" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Verify</a>
             <Link href="/privacy" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">Privacy</Link>
           </nav>
 
@@ -156,6 +165,7 @@ export default function LandingPage() {
           <div className="md:hidden border-t p-4 bg-white dark:bg-slate-950 space-y-4">
             <a href="#features" className="block text-sm font-medium" onClick={() => setIsMenuOpen(false)}>Features</a>
             <a href="#how-it-works" className="block text-sm font-medium" onClick={() => setIsMenuOpen(false)}>How it works</a>
+            <a href="#verify-section" className="block text-sm font-medium" onClick={() => setIsMenuOpen(false)}>Verify</a>
             <Link href="/privacy" className="block text-sm font-medium" onClick={() => setIsMenuOpen(false)}>Privacy</Link>
           </div>
         )}
@@ -251,6 +261,39 @@ export default function LandingPage() {
                 </div>
               )}
             </Card>
+          </div>
+        </section>
+
+        {/* Verification Section */}
+        <section id="verify-section" className="py-20 bg-slate-50 dark:bg-slate-900/30 border-t border-slate-200 dark:border-slate-800">
+          <div className="container mx-auto px-4 max-w-xl text-center">
+            <div className="mb-8">
+              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <Shield className="w-6 h-6" />
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Verify Document Authenticity</h2>
+              <p className="text-slate-600 dark:text-slate-400">
+                Enter the Document ID found on the "Certificate of Completion" to verify its integrity.
+              </p>
+            </div>
+
+            <form onSubmit={handleVerify} className="relative max-w-md mx-auto">
+              <input
+                type="text"
+                placeholder="Enter Document ID (e.g. 123e4567-...)"
+                value={verifyId}
+                onChange={(e) => setVerifyId(e.target.value)}
+                className="w-full pl-4 pr-12 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
+              />
+              <Button
+                type="submit"
+                size="sm"
+                className="absolute right-1.5 top-1.5 bottom-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600"
+                disabled={!verifyId.trim()}
+              >
+                Verify
+              </Button>
+            </form>
           </div>
         </section>
 
