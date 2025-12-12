@@ -8,11 +8,15 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
     const { id } = await params;
     const { integrity } = await searchParams;
 
+    console.log('[VerifyPage] Verifying ID:', id);
+    console.log('[VerifyPage] Integrity param:', integrity);
+
     // Fetch document details
     // Allow lookup by ID (UUID) or Slug
     const { rows: docs } = await sql`
         SELECT * FROM documents WHERE id::text = ${id} OR slug = ${id}
   `;
+    console.log('[VerifyPage] Docs found:', docs.length);
 
     if (docs.length === 0) {
         return (
@@ -154,19 +158,34 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
                     </CardHeader>
                     <CardContent>
                         <div className="relative border-l-2 border-gray-200 dark:border-gray-700 ml-3 space-y-6 pl-6 pb-2">
-                            {logs.map((log: any) => (
-                                <div key={log.id} className="relative">
-                                    <span className="absolute -left-[31px] top-1 w-4 h-4 rounded-full bg-gray-200 dark:bg-gray-700 border-2 border-white dark:border-gray-900"></span>
-                                    <div>
-                                        <p className="font-medium text-sm">{log.action.toUpperCase().replace('_', ' ')}</p>
-                                        <p className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString()}</p>
-                                        <p className="text-xs mt-1 text-gray-500">
-                                            by {log.actor_email || 'System/Guest'}
-                                            {log.actor_ip && <span className="ml-1 opacity-70">({log.actor_ip})</span>}
-                                        </p>
+                            {logs.map((log: any) => {
+                                let actorName = log.actor_email;
+                                let details: any = {};
+                                try {
+                                    details = JSON.parse(log.details || '{}');
+                                    // If this is a signature event, try to resolve the name from the local signatures list
+                                    if (log.action === 'signed' && details.signature_id) {
+                                        const sig = signatures.find((s: any) => s.id === details.signature_id);
+                                        if (sig) {
+                                            actorName = sig.name;
+                                        }
+                                    }
+                                } catch (e) { /* ignore */ }
+
+                                return (
+                                    <div key={log.id} className="relative">
+                                        <span className="absolute -left-[31px] top-1 w-4 h-4 rounded-full bg-gray-200 dark:bg-gray-700 border-2 border-white dark:border-gray-900"></span>
+                                        <div>
+                                            <p className="font-medium text-sm">{log.action.toUpperCase().replace('_', ' ')}</p>
+                                            <p className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString()}</p>
+                                            <p className="text-xs mt-1 text-gray-500">
+                                                by <span className="font-medium text-gray-700 dark:text-gray-300">{actorName || 'System/Guest'}</span>
+                                                {log.actor_ip && <span className="ml-1 opacity-70">({log.actor_ip})</span>}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </CardContent>
                 </Card>

@@ -56,14 +56,14 @@ export async function addSignatures({
 
                 // Log Audit
                 await sql`
-                    INSERT INTO audit_logs (document_id, action, actor_email, details)
-                    VALUES (${documentId}, 'signed', ${signerEmail || 'anonymous_owner'}, ${JSON.stringify({ signature_id: result.rows[0].id })})
-                `;
+                    INSERT INTO audit_logs(document_id, action, actor_email, details)
+                VALUES(${documentId}, 'signed', ${signerEmail || sig.name || 'Anonymous'}, ${JSON.stringify({ signature_id: result.rows[0].id })})
+            `;
             } else {
                 console.error('No ID returned from INSERT');
             }
         }
-        revalidatePath(`/doc/${documentId}`);
+        revalidatePath(`/ doc / ${documentId} `);
         return insertedIds;
     } catch (error) {
         console.error('Error adding signatures:', error);
@@ -82,8 +82,8 @@ export async function generateSignedPdf(documentId: string, editorOptions?: {
 }) {
     try {
         // 1. Fetch document and signatures
-        const docResult = await sql`SELECT * FROM documents WHERE id = ${documentId}`;
-        const sigResult = await sql`SELECT * FROM signatures WHERE document_id = ${documentId}`;
+        const docResult = await sql`SELECT * FROM documents WHERE id = ${documentId} `;
+        const sigResult = await sql`SELECT * FROM signatures WHERE document_id = ${documentId} `;
 
         if (docResult.rows.length === 0) throw new Error('Document not found');
         const document = docResult.rows[0];
@@ -166,7 +166,7 @@ export async function generateSignedPdf(documentId: string, editorOptions?: {
             const footerFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
             const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://signed-app.vercel.app';
-            const verificationUrl = `${baseUrl}/verify/${documentId}?integrity=${integrityId}`;
+            const verificationUrl = `${baseUrl} /verify/${documentId}?integrity = ${integrityId} `;
             const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
             const qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
 
@@ -187,7 +187,7 @@ export async function generateSignedPdf(documentId: string, editorOptions?: {
             });
 
             // Document Info Text
-            lastPage.drawText(`Document ID: ${documentId}`, {
+            lastPage.drawText(`Document ID: ${documentId} `, {
                 x: 100,
                 y: 55,
                 size: 9,
@@ -219,13 +219,13 @@ export async function generateSignedPdf(documentId: string, editorOptions?: {
 
         // -- Certificate Header --
         certificatePage.drawText('Certificate of Completion', { x: 50, y: certHeight - 80, size: 24, font: boldFont });
-        certificatePage.drawText(`Document ID: ${documentId}`, { x: 50, y: certHeight - 110, size: 12, font });
-        certificatePage.drawText(`Date: ${new Date().toISOString()}`, { x: 50, y: certHeight - 125, size: 12, font });
+        certificatePage.drawText(`Document ID: ${documentId} `, { x: 50, y: certHeight - 110, size: 12, font });
+        certificatePage.drawText(`Date: ${new Date().toISOString()} `, { x: 50, y: certHeight - 125, size: 12, font });
 
         // -- QR Code -- 
         // Verification Link (Using same integrity ID)
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.com';
-        const verificationUrl = `${baseUrl}/verify/${documentId}?integrity=${integrityId}`;
+        const verificationUrl = `${baseUrl} /verify/${documentId}?integrity = ${integrityId} `;
         const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
         const qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
         certificatePage.drawImage(qrCodeImage, {
@@ -248,8 +248,8 @@ export async function generateSignedPdf(documentId: string, editorOptions?: {
 
         for (const log of auditLogs) {
             const dateStr = new Date(log.created_at).toLocaleString();
-            const actionStr = `${log.action.toUpperCase()} by ${log.actor_email || 'Anonymous'}`;
-            certificatePage.drawText(`${dateStr} - ${actionStr}`, { x: 50, y: yPos, size: 10, font });
+            const actionStr = `${log.action.toUpperCase()} by ${log.actor_email || 'Anonymous'} `;
+            certificatePage.drawText(`${dateStr} - ${actionStr} `, { x: 50, y: yPos, size: 10, font });
             yPos -= 15;
 
             if (yPos < 50) {
@@ -277,7 +277,7 @@ export async function generateSignedPdf(documentId: string, editorOptions?: {
         const hash = createHash('sha256').update(Buffer.from(pdfBytes)).digest('hex');
 
         // 8. Upload to Blob
-        const blob = await put(`signed-${documentId}.pdf`, Buffer.from(pdfBytes), {
+        const blob = await put(`signed - ${documentId}.pdf`, Buffer.from(pdfBytes), {
             access: 'public',
         });
 
@@ -286,7 +286,7 @@ export async function generateSignedPdf(documentId: string, editorOptions?: {
             UPDATE documents 
             SET password = NULL, verification_hash = ${hash}, completed_at = NOW(), integrity_id = ${integrityId}
             WHERE id = ${documentId}
-        `;
+            `;
 
         return { url: blob.url };
     } catch (error) {
@@ -303,8 +303,8 @@ export async function generateSignedZip(documentIds: string[]) {
         // Process each document
         for (const docId of documentIds) {
             // 1. Fetch document and signatures
-            const docResult = await sql`SELECT * FROM documents WHERE id = ${docId}`;
-            const sigResult = await sql`SELECT * FROM signatures WHERE document_id = ${docId}`;
+            const docResult = await sql`SELECT * FROM documents WHERE id = ${docId} `;
+            const sigResult = await sql`SELECT * FROM signatures WHERE document_id = ${docId} `;
 
             if (docResult.rows.length === 0) continue;
             const document = docResult.rows[0];
@@ -344,7 +344,7 @@ export async function generateSignedZip(documentIds: string[]) {
 
             // 4. Save PDF
             const pdfBytes = await pdfDoc.save();
-            const fileName = document.url.split('/').pop() || `document-${docId}.pdf`;
+            const fileName = document.url.split('/').pop() || `document - ${docId}.pdf`;
             zip.file(fileName, pdfBytes);
         }
 
@@ -352,13 +352,13 @@ export async function generateSignedZip(documentIds: string[]) {
         const zipContent = await zip.generateAsync({ type: 'nodebuffer' });
 
         // 6. Upload ZIP to Blob
-        const blob = await put(`signed-documents-${Date.now()}.zip`, zipContent, {
+        const blob = await put(`signed - documents - ${Date.now()}.zip`, zipContent, {
             access: 'public',
         });
 
         // 7. Clear passwords (Auto-delete requirement)
         for (const docId of documentIds) {
-            await sql`UPDATE documents SET password = NULL WHERE id = ${docId}`;
+            await sql`UPDATE documents SET password = NULL WHERE id = ${docId} `;
         }
 
         return { url: blob.url };
@@ -371,7 +371,7 @@ export async function generateSignedZip(documentIds: string[]) {
 
 export async function deleteSignature(signatureId: string) {
     try {
-        await sql`DELETE FROM signatures WHERE id = ${signatureId}`;
+        await sql`DELETE FROM signatures WHERE id = ${signatureId} `;
         return { success: true };
     } catch (error) {
         console.error('Error deleting signature:', error);
@@ -385,12 +385,12 @@ export async function updateSignature(signatureId: string, updates: { x: number;
       UPDATE signatures
       SET x = ${updates.x}, y = ${updates.y}, width = ${updates.width}, height = ${updates.height}, page = ${updates.page}
       WHERE id = ${signatureId}
-    `;
+            `;
         return { success: true };
     } catch (error) {
         console.error('Error updating signature:', error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        throw new Error(`Failed to update signature: ${errorMessage}`);
+        throw new Error(`Failed to update signature: ${errorMessage} `);
     }
 }
 
@@ -403,8 +403,8 @@ export async function deleteDocument(documentId: string, fileUrl: string) {
 
         // Delete from Postgres (Cascading delete should handle signatures if set up, but let's be explicit or rely on schema)
         // Assuming no cascade set up in initial schema, let's delete signatures first
-        await sql`DELETE FROM signatures WHERE document_id = ${documentId}`;
-        await sql`DELETE FROM documents WHERE id = ${documentId}`;
+        await sql`DELETE FROM signatures WHERE document_id = ${documentId} `;
+        await sql`DELETE FROM documents WHERE id = ${documentId} `;
 
         return { success: true };
     } catch (error) {
@@ -464,16 +464,16 @@ export async function uploadDocument(formData: FormData) {
     const ownerToken = crypto.randomUUID();
 
     const result = await sql`
-    INSERT INTO documents (url, expires_at, starts_at, owner_token)
-    VALUES (${blob.url}, ${expiresAt.toISOString()}, ${new Date().toISOString()}, ${ownerToken})
+    INSERT INTO documents(url, expires_at, starts_at, owner_token)
+            VALUES(${blob.url}, ${expiresAt.toISOString()}, ${new Date().toISOString()}, ${ownerToken})
     RETURNING id;
-  `;
+            `;
 
     const documentId = result.rows[0].id;
 
     // Set cookie for persistence and server-side verification
     const cookieStore = await cookies();
-    cookieStore.set(`doc_owner_${documentId}`, ownerToken, {
+    cookieStore.set(`doc_owner_${documentId} `, ownerToken, {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
         sameSite: 'lax',
@@ -490,11 +490,11 @@ export async function updateDocumentSettings(documentId: string, settings: { sta
         let tokenToCheck = ownerToken;
         if (!tokenToCheck) {
             const cookieStore = await cookies();
-            const cookie = cookieStore.get(`doc_owner_${documentId}`);
+            const cookie = cookieStore.get(`doc_owner_${documentId} `);
             tokenToCheck = cookie?.value;
         }
 
-        const docResult = await sql`SELECT owner_token FROM documents WHERE id = ${documentId}`;
+        const docResult = await sql`SELECT owner_token FROM documents WHERE id = ${documentId} `;
         if (docResult.rows.length === 0) throw new Error('Document not found');
 
         if (docResult.rows[0].owner_token !== tokenToCheck) {
@@ -503,14 +503,14 @@ export async function updateDocumentSettings(documentId: string, settings: { sta
 
         // 2. Update settings
         if (settings.startsAt) {
-            await sql`UPDATE documents SET starts_at = ${settings.startsAt} WHERE id = ${documentId}`;
+            await sql`UPDATE documents SET starts_at = ${settings.startsAt} WHERE id = ${documentId} `;
         }
         if (settings.expiresAt) {
-            await sql`UPDATE documents SET expires_at = ${settings.expiresAt} WHERE id = ${documentId}`;
+            await sql`UPDATE documents SET expires_at = ${settings.expiresAt} WHERE id = ${documentId} `;
         }
         if (settings.password !== undefined) {
             // Allow setting empty string to clear password
-            await sql`UPDATE documents SET password = ${settings.password || null} WHERE id = ${documentId}`;
+            await sql`UPDATE documents SET password = ${settings.password || null} WHERE id = ${documentId} `;
         }
 
         if (settings.slug !== undefined) {
@@ -524,15 +524,15 @@ export async function updateDocumentSettings(documentId: string, settings: { sta
                 }
 
                 // Check uniqueness
-                const existing = await sql`SELECT id FROM documents WHERE slug = ${slugToSet} AND id != ${documentId}`;
+                const existing = await sql`SELECT id FROM documents WHERE slug = ${slugToSet} AND id != ${documentId} `;
                 if (existing.rows.length > 0) {
                     throw new Error('This link is already taken. Please choose another one.');
                 }
             }
-            await sql`UPDATE documents SET slug = ${slugToSet} WHERE id = ${documentId}`;
+            await sql`UPDATE documents SET slug = ${slugToSet} WHERE id = ${documentId} `;
         }
 
-        revalidatePath(`/doc/${documentId}`);
+        revalidatePath(`/ doc / ${documentId} `);
         return { success: true };
     } catch (error) {
         console.error('Error updating document settings:', error);
@@ -550,14 +550,14 @@ export async function updateDocumentUrl(documentId: string, newUrl: string, oldU
       UPDATE documents
       SET url = ${newUrl}
       WHERE id = ${documentId}
-    `;
+            `;
 
         // 2. Delete old file from Blob if provided
         if (oldUrl) {
             await del(oldUrl);
         }
 
-        revalidatePath(`/doc/${documentId}`);
+        revalidatePath(`/ doc / ${documentId} `);
         return { success: true };
     } catch (error) {
         console.error('Error updating document URL:', error);
@@ -569,7 +569,7 @@ export async function updateDocumentUrl(documentId: string, newUrl: string, oldU
 export async function sendInvitations(documentId: string, signers: { email: string; name: string }[], senderName?: string) {
     try {
         // 1. Validate doc exists
-        const docResult = await sql`SELECT * FROM documents WHERE id = ${documentId}`;
+        const docResult = await sql`SELECT * FROM documents WHERE id = ${documentId} `;
         if (docResult.rows.length === 0) throw new Error('Document not found');
 
         // Optional: Update owner_email if first time? Or just log it.
@@ -581,13 +581,13 @@ export async function sendInvitations(documentId: string, signers: { email: stri
         for (const signer of signers) {
             const token = crypto.randomUUID(); // Secure token for link
             await sql`
-                INSERT INTO signers (document_id, email, name, token, status)
-                VALUES (${documentId}, ${signer.email}, ${signer.name}, ${token}, 'pending')
-            `;
+                INSERT INTO signers(document_id, email, name, token, status)
+            VALUES(${documentId}, ${signer.email}, ${signer.name}, ${token}, 'pending')
+                `;
 
             // 3. Send Email (Mocked for now)
-            console.log(`[MOCK EMAIL] To: ${signer.email}, Subject: ${senderName || 'Someone'} has sent you a document to sign`);
-            console.log(`[LINK] ${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/sign/${token}`);
+            console.log(`[MOCK EMAIL]To: ${signer.email}, Subject: ${senderName || 'Someone'} has sent you a document to sign`);
+            console.log(`[LINK] ${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'} /sign/${token} `);
         }
 
         return { success: true };
@@ -630,7 +630,7 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
         for (const vPage of virtualPages) {
             // Load source document if not cached
             if (!docCache[vPage.docId]) {
-                const docResult = await sql`SELECT * FROM documents WHERE id = ${vPage.docId}`;
+                const docResult = await sql`SELECT * FROM documents WHERE id = ${vPage.docId} `;
                 if (docResult.rows.length === 0) continue;
 
                 const document = docResult.rows[0];
@@ -780,7 +780,7 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
                 const footerFont = await newPdf.embedFont(StandardFonts.Helvetica);
 
                 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://signed-app.vercel.app';
-                const verificationUrl = `${baseUrl}/verify/${mainDocId}?integrity=${integrityId}`;
+                const verificationUrl = `${baseUrl} /verify/${mainDocId}?integrity = ${integrityId} `;
                 const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
                 const qrCodeImage = await newPdf.embedPng(qrCodeDataUrl);
 
@@ -801,7 +801,7 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
                 });
 
                 // Document Info Text
-                lastPage.drawText(`Document ID: ${mainDocId}`, {
+                lastPage.drawText(`Document ID: ${mainDocId} `, {
                     x: 100,
                     y: 55,
                     size: 9,
@@ -834,12 +834,12 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
             const boldFont = await newPdf.embedFont(StandardFonts.HelveticaBold);
 
             certificatePage.drawText('Certificate of Completion', { x: 50, y: certHeight - 80, size: 24, font: boldFont });
-            certificatePage.drawText(`Document ID: ${mainDocId}`, { x: 50, y: certHeight - 110, size: 12, font });
-            certificatePage.drawText(`Date: ${new Date().toISOString()}`, { x: 50, y: certHeight - 125, size: 12, font });
+            certificatePage.drawText(`Document ID: ${mainDocId} `, { x: 50, y: certHeight - 110, size: 12, font });
+            certificatePage.drawText(`Date: ${new Date().toISOString()} `, { x: 50, y: certHeight - 125, size: 12, font });
 
             // QR Code
             const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://signed-app.vercel.app';
-            const verificationUrl = `${baseUrl}/verify/${mainDocId}?integrity=${integrityId}`;
+            const verificationUrl = `${baseUrl} /verify/${mainDocId}?integrity = ${integrityId} `;
             const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
             const qrCodeImage = await newPdf.embedPng(qrCodeDataUrl);
 
@@ -858,8 +858,8 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
             const auditResult = await sql`SELECT * FROM audit_logs WHERE document_id = ${mainDocId} ORDER BY created_at ASC LIMIT 20`;
             for (const log of auditResult.rows) {
                 const dateStr = new Date(log.created_at).toLocaleString();
-                const actionStr = `${log.action.toUpperCase()} by ${log.actor_email || 'Anonymous'}`;
-                certificatePage.drawText(`${dateStr} - ${actionStr}`, { x: 50, y: yPos, size: 10, font });
+                const actionStr = `${log.action.toUpperCase()} by ${log.actor_email || 'Anonymous'} `;
+                certificatePage.drawText(`${dateStr} - ${actionStr} `, { x: 50, y: yPos, size: 10, font });
                 yPos -= 15;
             }
         }
@@ -867,7 +867,7 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
 
         // 5. Save and Upload
         const pdfBytes = await newPdf.save();
-        const blob = await put(`signed-combined-${Date.now()}.pdf`, Buffer.from(pdfBytes), {
+        const blob = await put(`signed - combined - ${Date.now()}.pdf`, Buffer.from(pdfBytes), {
             access: 'public',
         });
 
@@ -887,7 +887,7 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
         const uniqueDocIds = new Set(virtualPages.map(vp => vp.docId));
         for (const docId of uniqueDocIds) {
             if (docId !== mainDocId) { // mainDocId already handled
-                await sql`UPDATE documents SET password = NULL WHERE id = ${docId}`;
+                await sql`UPDATE documents SET password = NULL WHERE id = ${docId} `;
             }
         }
 
@@ -904,8 +904,8 @@ export async function regenerateDocumentLink(documentId: string) {
     try {
         // 1. Verify Ownership (Cookie Check)
         const cookieStore = await cookies();
-        const token = cookieStore.get(`doc_owner_${documentId}`)?.value;
-        const docResult = await sql`SELECT * FROM documents WHERE id = ${documentId}`;
+        const token = cookieStore.get(`doc_owner_${documentId} `)?.value;
+        const docResult = await sql`SELECT * FROM documents WHERE id = ${documentId} `;
 
         if (docResult.rows.length === 0) throw new Error('Document not found');
         if (docResult.rows[0].owner_token !== token) throw new Error('Unauthorized');
@@ -915,23 +915,23 @@ export async function regenerateDocumentLink(documentId: string) {
 
         // 2. Create NEW Document (Copy)
         const newDocResult = await sql`
-            INSERT INTO documents (url, expires_at, starts_at, owner_token, created_at)
-            VALUES (${originalDoc.url}, ${originalDoc.expires_at}, ${originalDoc.starts_at}, ${newOwnerToken}, NOW())
+            INSERT INTO documents(url, expires_at, starts_at, owner_token, created_at)
+            VALUES(${originalDoc.url}, ${originalDoc.expires_at}, ${originalDoc.starts_at}, ${newOwnerToken}, NOW())
             RETURNING id
-        `;
+                `;
         const newDocId = newDocResult.rows[0].id;
 
         // 3. Copy Signatures
         // We select all signatures from old doc and insert them for new doc
         await sql`
-            INSERT INTO signatures (document_id, name, data, x, y, width, height, page)
+            INSERT INTO signatures(document_id, name, data, x, y, width, height, page)
             SELECT ${newDocId}, name, data, x, y, width, height, page
             FROM signatures
             WHERE document_id = ${documentId}
-        `;
+            `;
 
         // 4. Set Cookie for New Owner Token
-        cookieStore.set(`doc_owner_${newDocId}`, newOwnerToken, {
+        cookieStore.set(`doc_owner_${newDocId} `, newOwnerToken, {
             secure: process.env.NODE_ENV === 'production',
             httpOnly: true,
             sameSite: 'lax',
@@ -940,7 +940,7 @@ export async function regenerateDocumentLink(documentId: string) {
 
         // 5. Delete Old Document (Optional: or keep as archive? User wants "new link", implying invalidating old one)
         // Deleting old document invalidates the old link immediately.
-        await sql`DELETE FROM documents WHERE id = ${documentId}`;
+        await sql`DELETE FROM documents WHERE id = ${documentId} `;
 
         // 6. Return new ID for redirect
         return { success: true, newDocumentId: newDocId };
@@ -953,14 +953,14 @@ export async function regenerateDocumentLink(documentId: string) {
 
 export async function verifyDocumentPassword(documentId: string, password: string) {
     try {
-        const docResult = await sql`SELECT password FROM documents WHERE id = ${documentId}`;
+        const docResult = await sql`SELECT password FROM documents WHERE id = ${documentId} `;
         if (docResult.rows.length === 0) return { success: false, error: 'Document not found' };
 
         const storedPassword = docResult.rows[0].password;
         if (storedPassword === password) {
             // Set access cookie
             const cookieStore = await cookies();
-            cookieStore.set(`doc_access_${documentId}`, 'granted', {
+            cookieStore.set(`doc_access_${documentId} `, 'granted', {
                 secure: process.env.NODE_ENV === 'production',
                 httpOnly: true,
                 sameSite: 'lax',
@@ -987,16 +987,16 @@ export async function createDocumentRecord(
         const ownerToken = crypto.randomUUID();
 
         const result = await sql`
-      INSERT INTO documents (url, expires_at, starts_at, owner_token)
-      VALUES (${url}, ${expiresAt.toISOString()}, ${new Date().toISOString()}, ${ownerToken})
+      INSERT INTO documents(url, expires_at, starts_at, owner_token)
+            VALUES(${url}, ${expiresAt.toISOString()}, ${new Date().toISOString()}, ${ownerToken})
       RETURNING id;
-    `;
+            `;
 
         const documentId = result.rows[0].id;
 
         // Set cookie for persistence
         const cookieStore = await cookies();
-        cookieStore.set(`doc_owner_${documentId}`, ownerToken, {
+        cookieStore.set(`doc_owner_${documentId} `, ownerToken, {
             secure: process.env.NODE_ENV === 'production',
             httpOnly: true,
             sameSite: 'lax',
@@ -1008,5 +1008,24 @@ export async function createDocumentRecord(
     } catch (error) {
         console.error('Error creating document record:', error);
         throw new Error('Failed to create document record');
+    }
+}
+// ... existing code ...
+
+export async function verifyDocumentByHash(fileHash: string) {
+    try {
+        console.log('Verifying document by hash:', fileHash);
+        // Query documents by verification_hash
+        // Note: verification_hash is added via migration, make sure it exists in DB
+        const result = await sql`SELECT id FROM documents WHERE verification_hash = ${fileHash}`;
+
+        if (result.rows.length > 0) {
+            return { success: true, documentId: result.rows[0].id };
+        } else {
+            return { success: false, error: 'Document not found or has been modified.', documentId: null };
+        }
+    } catch (error) {
+        console.error('Error verifying document by hash:', error);
+        return { success: false, error: 'Failed to verify document.', documentId: null };
     }
 }
