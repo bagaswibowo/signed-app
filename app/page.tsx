@@ -277,23 +277,46 @@ export default function LandingPage() {
               </p>
             </div>
 
-            <form onSubmit={handleVerify} className="relative max-w-md mx-auto">
-              <input
-                type="text"
-                placeholder="Enter Document ID (e.g. 123e4567-...)"
-                value={verifyId}
-                onChange={(e) => setVerifyId(e.target.value)}
-                className="w-full pl-4 pr-12 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
-              />
+            <div className="max-w-md mx-auto space-y-6">
+              <form onSubmit={handleVerify} className="relative">
+                <input
+                  type="text"
+                  placeholder="Enter Document ID (e.g. 123e4567-...)"
+                  value={verifyId}
+                  onChange={(e) => setVerifyId(e.target.value)}
+                  className="w-full pl-4 pr-12 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="absolute right-1.5 top-1.5 bottom-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600"
+                  disabled={!verifyId.trim()}
+                >
+                  Verify
+                </Button>
+              </form>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-slate-300 dark:border-slate-700" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-slate-50 dark:bg-slate-900 px-2 text-slate-500">Or verify by file</span>
+                </div>
+              </div>
+
               <Button
-                type="submit"
-                size="sm"
-                className="absolute right-1.5 top-1.5 bottom-1.5 bg-slate-900 hover:bg-slate-800 dark:bg-slate-700 dark:hover:bg-slate-600"
-                disabled={!verifyId.trim()}
+                variant="outline"
+                className="w-full border-dashed border-2 hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 h-auto py-4 flex flex-col items-center gap-2"
+                onClick={() => router.push('/verify?tab=file')}
               >
-                Verify
+                <Upload className="w-6 h-6 text-slate-400" />
+                <div className="text-center">
+                  <span className="font-semibold block">Click to Check File Integrity</span>
+                  <span className="text-xs text-slate-500 font-normal">Upload a signed PDF to verify it hasn't been tampered with</span>
+                </div>
               </Button>
-            </form>
+            </div>
           </div>
         </section>
 

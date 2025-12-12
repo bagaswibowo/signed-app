@@ -5,7 +5,9 @@ import { sql } from '@vercel/postgres';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { createHash } from 'crypto';
+import QRCode from 'qrcode';
 
 interface Signature {
     id: string;
@@ -839,7 +841,7 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
 
             // QR Code
             const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://signed-app.vercel.app';
-            const verificationUrl = `${baseUrl} /verify/${mainDocId}?integrity = ${integrityId} `;
+            const verificationUrl = `${baseUrl}/verify/${mainDocId}?integrity=${integrityId}`;
             const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
             const qrCodeImage = await newPdf.embedPng(qrCodeDataUrl);
 

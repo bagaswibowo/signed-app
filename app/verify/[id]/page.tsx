@@ -8,13 +8,26 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
     const { id } = await params;
     const { integrity } = await searchParams;
 
-    console.log('[VerifyPage] Verifying ID:', id);
-    console.log('[VerifyPage] Integrity param:', integrity);
+    let lookupId = '';
+    try {
+        lookupId = decodeURIComponent(id).trim();
+    } catch {
+        lookupId = id?.trim() || '';
+    }
+
+    console.log('[VerifyPage] Verifying ID (Processed):', lookupId);
 
     // Fetch document details
-    // Allow lookup by ID (UUID) or Slug
+    // Allow lookup by ID (UUID) or Slug (Case insensitive for slug)
+    // Use proper UUID casting if it looks like a UUID to avoid text comparison issues
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(lookupId);
+
     const { rows: docs } = await sql`
-        SELECT * FROM documents WHERE id::text = ${id} OR slug = ${id}
+        SELECT * FROM documents 
+        WHERE 
+            (${isUuid}::boolean AND id = ${lookupId}::uuid) 
+            OR 
+            slug = ${lookupId}
   `;
     console.log('[VerifyPage] Docs found:', docs.length);
 

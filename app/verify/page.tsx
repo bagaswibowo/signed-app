@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,25 @@ import { verifyDocumentByHash } from '@/app/actions';
 
 export default function VerifyPage() {
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState('id');
+    const searchParams = useSearchParams();
+    const tabParam = searchParams.get('tab');
+
+    // Default to 'id' unless 'file' is specified
+    const [activeTab, setActiveTab] = useState(tabParam === 'file' ? 'file' : 'id');
+
+    // Update URL when tab changes without refreshing (optional but nice)
+    useEffect(() => {
+        if (tabParam && tabParam !== activeTab) {
+            // If URL changes (e.g. back button), sync state
+            setActiveTab(tabParam === 'file' ? 'file' : 'id');
+        }
+    }, [tabParam]);
+
+    const handleTabChange = (val: string) => {
+        setActiveTab(val);
+        // Shallow push to update URL
+        router.push(`/verify?tab=${val}`);
+    };
     const [verifyId, setVerifyId] = useState('');
     const [isVerifyingFile, setIsVerifyingFile] = useState(false);
     const [fileStatus, setFileStatus] = useState<'idle' | 'verifying' | 'success' | 'error'>('idle');
@@ -101,7 +119,7 @@ export default function VerifyPage() {
                         {/* Tabs Placeholder - will be replaced if Tabs component missing */}
                     </CardHeader>
                     <CardContent className="pt-6">
-                        <Tabs defaultValue="id" onValueChange={(val) => setActiveTab(val)} className="w-full">
+                        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                             <TabsList className="grid w-full grid-cols-2 mb-6">
                                 <TabsTrigger value="id">By Document ID</TabsTrigger>
                                 <TabsTrigger value="file">By File Upload</TabsTrigger>
