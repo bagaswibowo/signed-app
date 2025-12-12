@@ -29,11 +29,12 @@ export async function GET(request: Request) {
             await del(urlsToDelete);
         }
 
-        // 3. Delete from Postgres
-        // We can just delete them all in one go
+        // 3. Soft Delete from Postgres (Set url to NULL)
+        // We keep the record for verification purposes.
         await sql`
-      DELETE FROM documents 
-      WHERE expires_at < NOW()
+      UPDATE documents 
+      SET url = NULL, password = NULL
+      WHERE expires_at < NOW() AND url IS NOT NULL
     `;
 
         return NextResponse.json({

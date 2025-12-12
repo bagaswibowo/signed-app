@@ -168,7 +168,7 @@ export async function generateSignedPdf(documentId: string, editorOptions?: {
             const footerFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
             const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://signed-app.vercel.app';
-            const verificationUrl = `${baseUrl} /verify/${documentId}?integrity = ${integrityId} `;
+            const verificationUrl = `${baseUrl}/verify/${documentId}?integrity=${integrityId}`;
             const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
             const qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
 
@@ -227,7 +227,7 @@ export async function generateSignedPdf(documentId: string, editorOptions?: {
         // -- QR Code -- 
         // Verification Link (Using same integrity ID)
         const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.com';
-        const verificationUrl = `${baseUrl} /verify/${documentId}?integrity = ${integrityId} `;
+        const verificationUrl = `${baseUrl}/verify/${documentId}?integrity=${integrityId}`;
         const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
         const qrCodeImage = await pdfDoc.embedPng(qrCodeDataUrl);
         certificatePage.drawImage(qrCodeImage, {
@@ -398,15 +398,22 @@ export async function updateSignature(signatureId: string, updates: { x: number;
 
 export async function deleteDocument(documentId: string, fileUrl: string) {
     try {
-        // Delete from Blob
+        // Delete from Blob (Soft Delete: Remove file, keep record)
         if (fileUrl) {
             await del(fileUrl);
         }
 
-        // Delete from Postgres (Cascading delete should handle signatures if set up, but let's be explicit or rely on schema)
-        // Assuming no cascade set up in initial schema, let's delete signatures first
-        await sql`DELETE FROM signatures WHERE document_id = ${documentId} `;
-        await sql`DELETE FROM documents WHERE id = ${documentId} `;
+        // Update Postgres to remove connection to file, but keep metadata for verification
+        // casting null to text might be needed if strict, but template literals usually handle null.
+        // We also clear the password to prevent access attempts, though with no URL it's moot.
+        await sql`
+            UPDATE documents 
+            SET url = NULL, password = NULL
+            WHERE id = ${documentId}
+        `;
+
+        // We DO NOT delete signatures or the document row. 
+        // This ensures the ID and Hash remain verifyable.
 
         return { success: true };
     } catch (error) {
@@ -782,7 +789,7 @@ export async function assembleAndSignPdf(virtualPages: VirtualPage[]) {
                 const footerFont = await newPdf.embedFont(StandardFonts.Helvetica);
 
                 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://signed-app.vercel.app';
-                const verificationUrl = `${baseUrl} /verify/${mainDocId}?integrity = ${integrityId} `;
+                const verificationUrl = `${baseUrl}/verify/${mainDocId}?integrity=${integrityId}`;
                 const qrCodeDataUrl = await QRCode.toDataURL(verificationUrl);
                 const qrCodeImage = await newPdf.embedPng(qrCodeDataUrl);
 

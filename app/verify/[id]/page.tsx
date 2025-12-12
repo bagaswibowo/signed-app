@@ -109,8 +109,22 @@ export default async function VerifyPage({ params, searchParams }: { params: Pro
                                 <p className="font-mono">{doc.id}</p>
                             </div>
                             <div>
+                                <p className="text-muted-foreground">Status</p>
+                                {!doc.url ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                                        Content Deleted
+                                    </span>
+                                ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                        Active
+                                    </span>
+                                )}
+                            </div>
+                            <div>
                                 <p className="text-muted-foreground">Completed At</p>
-                                <p className="font-medium">{doc.completed_at ? new Date(doc.completed_at).toLocaleString() : 'Pending/Active'}</p>
+                                <p className="font-medium">{doc.completed_at ? new Date(doc.completed_at).toLocaleString() : 'Pending'}</p>
                             </div>
                             <div className="md:col-span-2">
                                 <p className="text-muted-foreground">SHA-256 Hash</p>
