@@ -55,9 +55,9 @@ export default async function DocPage({ params }: { params: Promise<{ id: string
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Link Expired</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Tautan Kedaluwarsa</h1>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              This document link is no longer active. Please contact the document owner for a new link.
+              Tautan dokumen ini tidak lagi aktif. Silakan hubungi pemilik dokumen untuk tautan baru.
             </p>
           </div>
         </div>

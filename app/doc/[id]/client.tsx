@@ -335,7 +335,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             router.refresh(); // Update props without reload
         } catch (error) {
             console.error('Failed to save settings:', error);
-            alert('Failed to save settings. You may not be the owner.');
+            alert('Gagal menyimpan pengaturan. Anda mungkin bukan pemiliknya.');
         } finally {
             setSettingsLoading(false);
         }
@@ -501,7 +501,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             setNewSignatures(prev => [...prev, newSig]);
             setActiveTool('select');
         } else if (activeTool === 'text') {
-            const text = prompt("Enter text:", "Annotation");
+            const text = prompt("Masukkan teks:", "Anotasi");
             if (text) {
                 const newSig: Signature = {
                     ...baseSig,
@@ -593,7 +593,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
 
     // Allow removing existing signatures ONLY if I own them (tracked in localStorage)
     const removeExistingSignature = async (id: string) => {
-        if (!confirm('Are you sure you want to delete this signature?')) return;
+        if (!confirm('Apakah Anda yakin ingin menghapus tanda tangan ini?')) return;
 
         try {
             // Optimistic update
@@ -609,7 +609,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             // No reload needed
         } catch (error) {
             console.error(error);
-            alert('Failed to delete signature');
+            alert('Gagal menghapus tanda tangan');
             window.location.reload();
         }
     };
@@ -681,11 +681,11 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                 await Promise.all(updatePromises);
             }
 
-            alert('Signatures saved successfully!');
+            alert('Tanda tangan berhasil disimpan!');
             window.location.reload();
         } catch (error) {
             console.error(error);
-            alert('Failed to save signatures.');
+            alert('Gagal menyimpan tanda tangan.');
         } finally {
             setIsSaving(false);
         }
@@ -722,12 +722,12 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                 }
             }
 
-            alert('Document generated. Redirecting to download...');
+            alert('Dokumen dibuat. Mengalihkan ke unduhan...');
             window.location.href = url;
 
         } catch (error) {
             console.error(error);
-            alert('Failed to generate PDF.');
+            alert('Gagal membuat PDF.');
         } finally {
             setIsGenerating(false);
         }
@@ -776,7 +776,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                 }
             } catch (error) {
                 console.error('Failed to add document:', error);
-                alert('Failed to add document');
+                alert('Gagal menambahkan dokumen');
                 setIsUploading(false);
             }
         }
@@ -829,7 +829,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                 }
             } catch (error) {
                 console.error('Failed to replace document:', error);
-                alert('Failed to replace document');
+                alert('Gagal mengganti dokumen');
                 setIsUploading(false);
             }
         }
@@ -867,7 +867,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             router.refresh();
         } catch (error) {
             console.error('Failed to delete document:', error);
-            alert('Failed to delete document');
+            alert('Gagal menghapus dokumen');
         }
     };
 
@@ -968,7 +968,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
     };
 
     const handleVirtualDelete = (index: number) => {
-        if (confirm('Delete this page?')) {
+        if (confirm('Hapus halaman ini?')) {
             setVirtualPages(prev => prev.filter((_, i) => i !== index));
         }
     };
@@ -1023,7 +1023,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
 
             } catch (err) {
                 console.error(err);
-                alert("Failed to insert page");
+                alert("Gagal menyisipkan halaman");
             } finally {
                 setIsUploading(false);
             }
@@ -1078,7 +1078,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
 
             } catch (err) {
                 console.error(err);
-                alert("Failed to replace page");
+                alert("Gagal mengganti halaman");
             } finally {
                 setIsUploading(false);
             }
@@ -1097,7 +1097,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
 
 
     const handleAddText = () => {
-        const text = prompt("Enter text to add:");
+        const text = prompt("Masukkan teks untuk ditambahkan:");
         if (text) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -1181,19 +1181,19 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                 <div className="bg-white dark:bg-slate-900 border-b dark:border-slate-800 p-4
  flex flex-wrap gap-4 justify-between items-center">
                     <div className="flex items-center gap-4">
-                        <h1 className="font-semibold text-slate-700 dark:text-slate-200 hidden md:block">Sign Document</h1>
+                        <h1 className="font-semibold text-slate-700 dark:text-slate-200 hidden md:block">Tanda Tangani Dokumen</h1>
                         <button
                             onClick={() => setShowSettingsModal(true)}
                             className="flex items-center px-3 py-1.5 text-sm border rounded-full hover:bg-gray-50 text-gray-600 transition-colors dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
                         >
                             <Share2 className="w-4 h-4 mr-1" />
-                            Share
+                            Bagikan
                         </button>
 
                         <button
                             onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
                             className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
-                            title="Toggle Theme"
+                            title="Ganti Tema"
                         >
                             {theme === 'light' ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
                         </button>
@@ -1206,14 +1206,14 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                             )}
                         >
                             <History className="w-4 h-4 mr-1" />
-                            History
+                            Riwayat
                         </button>
                         <button
                             onClick={() => document.getElementById('add-doc-input')?.click()}
                             className="flex items-center px-3 py-1.5 text-sm border border-blue-200 text-blue-600 rounded-full hover:bg-blue-50 transition-colors"
                         >
                             <UploadIcon className="w-4 h-4 mr-1" />
-                            Add File
+                            Tambah File
                         </button>
                         <input
                             id="add-doc-input"
@@ -1235,7 +1235,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     "p-1.5 rounded-md transition-colors",
                                     activeTool === 'select' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-slate-600 dark:text-slate-300"
                                 )}
-                                title="Select"
+                                title="Pilih"
                             >
                                 <MousePointer2 className="w-4 h-4" />
                             </button>
@@ -1249,7 +1249,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     "p-1.5 rounded-md transition-colors",
                                     activeTool === 'text' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-slate-600 dark:text-slate-300"
                                 )}
-                                title="Text"
+                                title="Teks"
                             >
                                 <Type className="w-4 h-4" />
                             </button>
@@ -1261,7 +1261,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     "p-1.5 rounded-md transition-colors",
                                     activeTool === 'rect' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-slate-600 dark:text-slate-300"
                                 )}
-                                title="Rectangle"
+                                title="Kotak"
                             >
                                 <Square className="w-4 h-4" />
                             </button>
@@ -1271,7 +1271,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     "p-1.5 rounded-md transition-colors",
                                     activeTool === 'circle' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-slate-600 dark:text-slate-300"
                                 )}
-                                title="Circle"
+                                title="Lingkaran"
                             >
                                 <Circle className="w-4 h-4" />
                             </button>
@@ -1285,7 +1285,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     "p-1.5 rounded-md transition-colors",
                                     activeTool === 'draw' ? "bg-white dark:bg-gray-600 shadow-sm text-blue-600" : "hover:bg-gray-200 dark:hover:bg-gray-700 text-slate-600 dark:text-slate-300"
                                 )}
-                                title="Draw"
+                                title="Gambar"
                             >
                                 <PenTool className="w-4 h-4" />
                             </button>
@@ -1298,7 +1298,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                         value={annotationStyle.strokeColor}
                                         onChange={(e) => setAnnotationStyle(prev => ({ ...prev, strokeColor: e.target.value }))}
                                         className="w-6 h-6 rounded-md border-0 p-0 overflow-hidden cursor-pointer"
-                                        title="Stroke Color"
+                                        title="Warna Garis"
                                     />
                                     {(activeTool === 'rect' || activeTool === 'circle') && (
                                         <input
@@ -1306,7 +1306,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                             value={annotationStyle.fillColor === 'transparent' ? '#ffffff' : annotationStyle.fillColor}
                                             onChange={(e) => setAnnotationStyle(prev => ({ ...prev, fillColor: e.target.value }))}
                                             className="w-6 h-6 rounded-md border-0 p-0 overflow-hidden cursor-pointer"
-                                            title="Fill Color"
+                                            title="Warna Isi"
                                         />
                                     )}
                                     <input
@@ -1315,7 +1315,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                         onChange={(e) => setAnnotationStyle(prev => ({ ...prev, strokeWidth: parseInt(e.target.value) || 1 }))}
                                         className="w-12 h-6 text-xs border rounded-md px-1"
                                         min="1" max="20"
-                                        title="Stroke Width"
+                                        title="Ketebalan Garis"
                                     />
                                 </div>
                             )}
@@ -1325,7 +1325,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                             <button
                                 onClick={handleZoomOut}
                                 className="p-2 hover:bg-gray-200 rounded-l-md text-gray-600"
-                                title="Zoom Out"
+                                title="Perkecil"
                             >
                                 <ZoomOut className="w-4 h-4" />
                             </button>
@@ -1335,7 +1335,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                             <button
                                 onClick={handleZoomIn}
                                 className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-r-md text-slate-600 dark:text-slate-300"
-                                title="Zoom In"
+                                title="Perbesar"
                             >
                                 <ZoomIn className="w-4 h-4" />
                             </button>
@@ -1360,7 +1360,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                             ) : (
                                 <Check className="w-4 h-4 mr-2" />
                             )}
-                            {(newSignatures.length > 0 || modifiedSignatureIds.size > 0) ? 'Save Changes' : 'Saved'}
+                            {(newSignatures.length > 0 || modifiedSignatureIds.size > 0) ? 'Simpan Perubahan' : 'Tersimpan'}
                         </button>
 
                         <button
@@ -1369,7 +1369,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                             className="flex items-center px-4 py-2 bg-gray-800 dark:bg-gray-700 text-white rounded-md hover:bg-gray-900 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4 mr-2" />}
-                            {documents.length > 1 ? 'Download All' : 'Download PDF'}
+                            {documents.length > 1 ? 'Unduh Semua' : 'Unduh PDF'}
                         </button>
 
                     </div>
@@ -1382,7 +1382,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     {!isInitialized && documents.length > 0 && (
                         <div className="flex flex-col items-center justify-center p-12">
                             <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-2" />
-                            <p className="text-gray-500">Initializing editor...</p>
+                            <p className="text-gray-500">Menyiapkan editor...</p>
                         </div>
                     )}
 
@@ -1440,28 +1440,28 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                         <button
                                             onClick={() => handleVirtualRotate(index)}
                                             className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-slate-700 dark:text-slate-200"
-                                            title="Rotate"
+                                            title="Putar"
                                         >
                                             <RotateCw className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={() => handleVirtualInsert(index)}
                                             className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-slate-700 dark:text-slate-200"
-                                            title="Insert Page After"
+                                            title="Sisipkan Halaman Setelahnya"
                                         >
                                             <FilePlus className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={() => handleVirtualReplace(index)}
                                             className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-slate-700 dark:text-slate-200"
-                                            title="Replace Page"
+                                            title="Ganti Halaman"
                                         >
                                             <FileInput className="w-4 h-4" />
                                         </button>
                                         <button
                                             onClick={() => handleVirtualDelete(index)}
                                             className="p-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400 rounded-md text-slate-700 dark:text-slate-200"
-                                            title="Delete"
+                                            title="Hapus"
                                         >
                                             <Trash2 className="w-4 h-4" />
                                         </button>
@@ -1657,7 +1657,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                                             />
                                                         )}
                                                         <div className="absolute -top-6 left-0 bg-gray-600 text-white text-xs px-2 py-0.5 rounded opacity-0 group-hover/locked:opacity-100 transition-opacity whitespace-nowrap z-10">
-                                                            {sig.name} (Locked)
+                                                            {sig.name} (Terkunci)
                                                         </div>
                                                     </div>
                                                 );
@@ -1812,7 +1812,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                                                         "no-drag absolute -bottom-2 -right-2 bg-indigo-500 text-white rounded-full p-1 hover:bg-indigo-600 pointer-events-auto cursor-pointer transition-opacity z-50",
                                                                         isSelected ? "opacity-100" : "opacity-0 group-hover/controls:opacity-100"
                                                                     )}
-                                                                    title="Duplicate"
+                                                                    title="Duplikat"
                                                                 >
                                                                     <Copy className="w-3 h-3" />
                                                                 </button>
@@ -1838,7 +1838,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                         <div className="p-4 border-b dark:border-gray-700 bg-slate-50 dark:bg-slate-800 flex items-center justify-between sticky top-0 z-10">
                             <h2 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center">
                                 <History className="w-4 h-4 mr-2" />
-                                Document History
+                                Riwayat Dokumen
                             </h2>
                             <button
                                 onClick={() => setShowHistory(false)}
@@ -1851,7 +1851,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                             {/* Document Created Event */}
                             <div className="relative pl-4 border-l-2 border-slate-200 dark:border-slate-700">
                                 <div className="absolute -left-[5px] top-0 w-2 h-2 rounded-full bg-gray-400" />
-                                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Documents Uploaded</p>
+                                <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Dokumen Diunggah</p>
                                 <p className="text-xs text-slate-500 dark:text-slate-400">{formatDate(documents[0].created_at)}</p>
                             </div>
 
@@ -1859,14 +1859,14 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                             {sortedSignatures.map((sig, i) => (
                                 <div key={i} className="relative pl-4 border-l-2 border-blue-200 dark:border-blue-900">
                                     <div className="absolute -left-[5px] top-0 w-2 h-2 rounded-full bg-blue-500" />
-                                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Signed by {sig.name}</p>
+                                    <p className="text-sm font-medium text-gray-800 dark:text-gray-200">Ditandatangani oleh {sig.name}</p>
                                     <p className="text-xs text-slate-500 dark:text-slate-400">{formatDate(sig.created_at)}</p>
-                                    <p className="text-xs text-gray-400 mt-1">Page {sig.page}</p>
+                                    <p className="text-xs text-gray-400 mt-1">Halaman {sig.page}</p>
                                 </div>
                             ))}
 
                             {sortedSignatures.length === 0 && (
-                                <p className="text-sm text-gray-400 italic text-center py-4">No signatures yet.</p>
+                                <p className="text-sm text-gray-400 italic text-center py-4">Belum ada tanda tangan.</p>
                             )}
                         </div>
                     </div>
@@ -1884,7 +1884,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 transition-colors text-sm font-medium shadow-sm"
                 >
                     <Plus className="w-4 h-4 mr-2" />
-                    Add Signature
+                    Tambah Tanda Tangan
                 </button>
 
                 <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 mx-1"></div>
@@ -1902,7 +1902,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     )}
                 >
                     {isChecklistMode ? <X className="w-4 h-4 mr-2" /> : <CheckSquare className="w-4 h-4 mr-2" />}
-                    {isChecklistMode ? 'Exit Checklist' : 'Add Checklist'}
+                    {isChecklistMode ? 'Keluar Ceklis' : 'Tambah Ceklis'}
                 </button>
             </div >
 
@@ -1914,7 +1914,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md overflow-hidden">
                             <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-                                <h3 className="font-semibold text-lg dark:text-white">Create Signature</h3>
+                                <h3 className="font-semibold text-lg dark:text-white">Buat Tanda Tangan</h3>
                                 <button onClick={() => {
                                     setIsDrawing(false);
                                     setNameError(false); // Clear error on close
@@ -1926,7 +1926,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                             <div className="p-4 space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Signer Name
+                                        Nama Penanda Tangan
                                     </label>
                                     <input
                                         type="text"
@@ -1939,23 +1939,23 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                             "w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white",
                                             nameError && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         )}
-                                        placeholder="Enter your name"
+                                        placeholder="Masukkan nama Anda"
                                     />
                                     {nameError && (
-                                        <p className="text-red-500 text-xs mt-1">Name is required</p>
+                                        <p className="text-red-500 text-xs mt-1">Nama wajib diisi</p>
                                     )}
                                 </div>
 
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Draw Signature
+                                        Gambar Tanda Tangan
                                     </label>
                                     <div className="border rounded-md overflow-hidden bg-gray-50 dark:bg-gray-100 relative">
                                         {uploadedSignatureImage ? (
                                             <div className="w-full h-48 flex items-center justify-center bg-gray-100">
                                                 <img
                                                     src={uploadedSignatureImage}
-                                                    alt="Signature Preview"
+                                                    alt="Pratinjau Tanda Tangan"
                                                     className="max-w-full max-h-full object-contain"
                                                 />
                                             </div>
@@ -1977,21 +1977,20 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                         }}
                                         className="text-sm text-red-600 hover:text-red-700 mt-1 dark:text-red-400"
                                     >
-                                        Clear
+                                        Hapus
                                     </button>
                                 </div>
 
                                 <div className="flex items-center justify-between pt-4 border-t dark:border-gray-700">
-                                    <span className="text-sm text-slate-500 dark:text-slate-400">Or upload image</span>
+                                    <span className="text-sm text-slate-500 dark:text-slate-400">Atau unggah gambar</span>
                                     <label className="cursor-pointer px-3 py-1.5 border rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 dark:border-gray-600 dark:text-gray-300 text-sm flex items-center transition-colors">
                                         <UploadIcon className="w-4 h-4 mr-2" />
-                                        Upload Image
+                                        Unggah Gambar
                                         <input
                                             type="file"
                                             accept="image/png, image/jpeg, image/jpg"
                                             className="hidden"
                                             onChange={handleUploadSignature}
-
                                         />
                                     </label>
                                 </div>
@@ -2006,13 +2005,13 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                     }}
                                     className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-md dark:text-gray-300 dark:hover:bg-gray-700"
                                 >
-                                    Cancel
+                                    Batal
                                 </button>
                                 <button
                                     onClick={handleCreateSignature}
                                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Create & Place
+                                    Buat & Tempatkan
                                 </button>
                             </div>
                         </div>
@@ -2025,7 +2024,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                     <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center backdrop-blur-sm">
                         <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl flex flex-col items-center">
                             <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-4" />
-                            <p className="text-slate-700 dark:text-slate-200 font-medium">Uploading Document...</p>
+                            <p className="text-slate-700 dark:text-slate-200 font-medium">Mengunggah Dokumen...</p>
                         </div>
                     </div>
                 )
@@ -2038,7 +2037,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-xl font-semibold flex items-center gap-2">
                                 <Share2 className="w-5 h-5 text-primary" />
-                                Share Document
+                                Bagikan Dokumen
                             </h2>
                             <Button variant="ghost" size="icon" onClick={() => setShowSettingsModal(false)} className="text-muted-foreground hover:text-foreground">
                                 <X className="w-5 h-5" />
@@ -2049,7 +2048,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                             {/* Link Section */}
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Document Link
+                                    Tautan Dokumen
                                 </label>
                                 <div className="flex gap-2">
                                     <Input
@@ -2068,7 +2067,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                             setCopied(true);
                                             setTimeout(() => setCopied(false), 2000);
                                         }}
-                                        title="Copy Link"
+                                        title="Salin Tautan"
                                     >
                                         {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                                     </Button>
@@ -2080,7 +2079,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                         className="text-primary hover:underline flex items-center gap-1"
                                     >
                                         <ShieldCheck className="w-3 h-3" />
-                                        Verify Integrity
+                                        Cek Integritas
                                     </a>
                                 </div>
                             </div>
@@ -2092,12 +2091,12 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                 <div className="space-y-4">
                                     <h3 className="font-medium text-gray-900 dark:text-gray-200 flex items-center gap-2">
                                         <Settings className="w-4 h-4" />
-                                        Access Settings
+                                        Pengaturan Akses
                                     </h3>
 
                                     <div>
                                         <label className="block text-sm font-medium text-foreground mb-1">
-                                            Custom Link / Shortlink (Optional)
+                                            Tautan Khusus / Singkat (Opsional)
                                         </label>
                                         <div className="flex items-center gap-2">
                                             <span className="text-sm text-muted-foreground">{typeof window !== 'undefined' ? window.location.origin : ''}/s/</span>
@@ -2110,14 +2109,14 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                             />
                                         </div>
                                         <p className="text-xs text-muted-foreground mt-1">
-                                            Create a short, memorable link for this document.
+                                            Buat tautan singkat yang mudah diingat untuk dokumen ini.
                                         </p>
                                     </div>
 
 
                                     <div>
                                         <label className="block text-sm font-medium text-foreground mb-1">
-                                            Expiry Time (Active Until)
+                                            Waktu Kedaluwarsa (Aktif Sampai)
                                         </label>
                                         <Input
                                             type="datetime-local"
@@ -2129,7 +2128,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
 
                                     <div>
                                         <label className="block text-sm font-medium text-foreground mb-1">
-                                            Password Protection (Optional)
+                                            Perlindungan Kata Sandi (Opsional)
                                         </label>
                                         <div className="relative">
                                             {/* We need to import Lock if not imported, but it is imported as per line 3 */}
@@ -2144,11 +2143,11 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                                 value={settingsPassword}
                                                 onChange={(e) => setSettingsPassword(e.target.value)}
                                                 className="w-full pl-9"
-                                                placeholder="Set a password to protect this link"
+                                                placeholder="Atur kata sandi untuk melindungi tautan ini"
                                             />
                                         </div>
                                         <p className="text-xs text-muted-foreground mt-1">
-                                            Leave empty to remove password protection.
+                                            Biarkan kosong untuk menghapus perlindungan kata sandi.
                                         </p>
                                     </div>
 
@@ -2161,7 +2160,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                             disabled={settingsLoading}
                                         >
                                             <RefreshCw className="w-4 h-4 mr-2" />
-                                            Regenerate Link
+                                            Buat Ulang Tautan
                                         </Button>
 
                                         <Button
@@ -2169,7 +2168,7 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                             disabled={settingsLoading}
                                         >
                                             {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                                            Save Settings
+                                            Simpan Pengaturan
                                         </Button>
                                     </div>
                                 </div>
@@ -2177,8 +2176,8 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                 <div className="flex items-start gap-3 p-4 bg-yellow-50 text-yellow-800 border border-yellow-200 rounded-md dark:bg-yellow-900/20 dark:text-yellow-200 dark:border-yellow-700/50">
                                     <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
                                     <div className="text-sm">
-                                        <p className="font-semibold mb-1">Access Restricted</p>
-                                        <p className="text-yellow-700 dark:text-yellow-300">Only the document owner can configure access time settings.</p>
+                                        <p className="font-semibold mb-1">Akses Dibatasi</p>
+                                        <p className="text-yellow-700 dark:text-yellow-300">Hanya pemilik dokumen yang dapat mengonfigurasi pengaturan waktu akses.</p>
                                     </div>
                                 </div>
                             )}
@@ -2190,17 +2189,17 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             <Dialog open={isDownloadDialogOpen} onOpenChange={setIsDownloadDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Download Signed PDF?</DialogTitle>
+                        <DialogTitle>Unduh PDF Bertanda Tangan?</DialogTitle>
                         <DialogDescription>
-                            This will merge all signatures into the PDF.
-                            <br /><strong>Note:</strong> Password protection (if any) will be removed and source files will be deleted as per the 14-day auto-delete policy.
+                            Ini akan menggabungkan semua tanda tangan ke dalam PDF.
+                            <br /><strong>Catatan:</strong> Perlindungan kata sandi (jika ada) akan dihapus dan file sumber akan dihapus sesuai kebijakan penghapusan otomatis 14 hari.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsDownloadDialogOpen(false)}>Cancel</Button>
+                        <Button variant="outline" onClick={() => setIsDownloadDialogOpen(false)}>Batal</Button>
                         <Button onClick={confirmDownloadPdf} disabled={isGenerating}>
                             {isGenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                            Download
+                            Unduh
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -2209,14 +2208,14 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             <Dialog open={!!deleteDocId} onOpenChange={(open) => !open && setDeleteDocId(null)}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Delete Document?</DialogTitle>
+                        <DialogTitle>Hapus Dokumen?</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to delete this file? This action cannot be undone.
+                            Apakah Anda yakin ingin menghapus file ini? Tindakan ini tidak dapat dibatalkan.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeleteDocId(null)}>Cancel</Button>
-                        <Button variant="destructive" onClick={confirmDeleteSingleDocument}>Delete</Button>
+                        <Button variant="outline" onClick={() => setDeleteDocId(null)}>Batal</Button>
+                        <Button variant="destructive" onClick={confirmDeleteSingleDocument}>Hapus</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -2224,13 +2223,13 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
             <Dialog open={isRegenerateDialogOpen} onOpenChange={setIsRegenerateDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Regenerate Link?</DialogTitle>
+                        <DialogTitle>Buat Ulang Tautan?</DialogTitle>
                         <DialogDescription>
-                            This will <strong>invalidate the current link instantly</strong>. Everyone using the old link will lose access.
+                            Ini akan <strong>membatalkan tautan saat ini secara instan</strong>. Semua orang yang menggunakan tautan lama akan kehilangan akses.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsRegenerateDialogOpen(false)}>Cancel</Button>
+                        <Button variant="outline" onClick={() => setIsRegenerateDialogOpen(false)}>Batal</Button>
                         <Button
                             variant="destructive"
                             onClick={async () => {
@@ -2243,14 +2242,14 @@ export default function ClientSigningPage({ documents, existingSignatures, signe
                                         router.push(`/doc/${res.newDocumentId}`);
                                     }
                                 } catch (e) {
-                                    alert('Failed to regenerate link');
+                                    alert('Gagal membuat ulang tautan');
                                     setSettingsLoading(false);
                                 }
                             }}
                             disabled={settingsLoading}
                         >
                             {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-                            Regenerate
+                            Buat Ulang
                         </Button>
                     </DialogFooter>
                 </DialogContent>

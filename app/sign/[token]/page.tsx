@@ -40,7 +40,7 @@ export default async function SignerPage({ params }: { params: Promise<{ token: 
     return (
         <div className="relative">
             <div className="bg-blue-600 text-white text-center py-2 px-4 shadow-md sticky top-0 z-50">
-                Signing as: <strong>{signer.name || signer.email}</strong>
+                Menandatangani sebagai: <strong>{signer.name || signer.email}</strong>
             </div>
             <SigningPageWrapper
                 documents={[document]}

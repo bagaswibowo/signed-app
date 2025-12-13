@@ -19,10 +19,10 @@ export default function PasswordPrompt({ documentId }: { documentId: string }) {
             if (result.success) {
                 window.location.reload();
             } else {
-                setError(result.error || 'Incorrect password');
+                setError(result.error || 'Kata sandi salah');
             }
         } catch (err) {
-            setError('Verification failed');
+            setError('Verifikasi gagal');
         } finally {
             setLoading(false);
         }
@@ -35,9 +35,9 @@ export default function PasswordPrompt({ documentId }: { documentId: string }) {
                     <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
                         <Lock className="w-6 h-6 text-blue-600 dark:text-blue-400" />
                     </div>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Password Required</h1>
+                    <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Kata Sandi Diperlukan</h1>
                     <p className="text-gray-500 dark:text-gray-400 text-center mt-2">
-                        This document is password protected. Please enter the password to view.
+                        Dokumen ini dilindungi kata sandi. Silakan masukkan kata sandi untuk melihatnya.
                     </p>
                 </div>
 
@@ -47,7 +47,7 @@ export default function PasswordPrompt({ documentId }: { documentId: string }) {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            placeholder="Enter password"
+                            placeholder="Masukkan kata sandi"
                             className="w-full px-4 py-2 border rounded-lg dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                             autoFocus
                         />
@@ -62,7 +62,7 @@ export default function PasswordPrompt({ documentId }: { documentId: string }) {
                         disabled={loading || !password}
                         className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {loading ? 'Verifying...' : 'Unlock Document'}
+                        {loading ? 'Memverifikasi...' : 'Buka Dokumen'}
                     </button>
                 </form>
             </div>

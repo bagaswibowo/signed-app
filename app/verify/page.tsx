@@ -36,6 +36,25 @@ function VerifyContent() {
     const [fileMessage, setFileMessage] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    // Auto-fill ID from URL and verify
+    useEffect(() => {
+        const idParam = searchParams.get('id');
+        if (idParam && idParam !== verifyId && !verifyId) {
+            setVerifyId(idParam);
+            // Auto-trigger verification only if we haven't already (simple check)
+            // But we can't easily auto-submit with just state change in React without a subtle effect or ref
+            // Actually, handleVerifyId navigates to /verify/[id].
+            // So if ?id=xyz is present, we should probably just redirect to /verify/xyz immediately?
+            // "Masukkan ID" on landing page -> redirect to /verify?id=xyz -> then redirect to /verify/xyz?
+            // OR landing page redirects directly to /verify/xyz ?
+            // The plan said: "Landing Page ... router.push('/verify?id=' + input)"
+            // And "Verify Page useEffect ... if params.get('id') ... call verify".
+            // Since `handleVerifyId` just does `router.push('/verify/' + id)`, 
+            // we can just redirect immediately if `id` param exists.
+            router.push(`/verify/${idParam}`);
+        }
+    }, [searchParams, router, verifyId]);
+
     const handleVerifyId = (e: React.FormEvent) => {
         e.preventDefault();
         if (verifyId.trim()) {
@@ -61,18 +80,18 @@ function VerifyContent() {
     const verifyFile = async (file: File) => {
         setIsVerifyingFile(true);
         setFileStatus('verifying');
-        setFileMessage('Computing file identity...');
+        setFileMessage('Menghitung identitas file...');
 
         try {
             const hash = await computeFileHash(file);
             console.log('Client Hash:', hash);
 
-            setFileMessage('Checking against records...');
+            setFileMessage('Memeriksa catatan...');
             const result = await verifyDocumentByHash(hash);
 
             if (result.success && result.documentId) {
                 setFileStatus('success');
-                setFileMessage('Document Verified! Redirecting...');
+                setFileMessage('Dokumen Terverifikasi! Mengalihkan...');
                 setTimeout(() => {
                     router.push(`/verify/${result.documentId}?integrity=${result.documentId /* Valid file implies integrity */}`);
                     // Wait, integrity check in [id]/page.tsx compares integrity param with DB integrity_id. 
@@ -90,12 +109,12 @@ function VerifyContent() {
                 }, 1500);
             } else {
                 setFileStatus('error');
-                setFileMessage(result.error || 'Verification failed.');
+                setFileMessage(result.error || 'Verifikasi gagal.');
             }
         } catch (error) {
             console.error(error);
             setFileStatus('error');
-            setFileMessage('An error occurred during verification.');
+            setFileMessage('Terjadi kesalahan saat verifikasi.');
         } finally {
             setIsVerifyingFile(false);
         }
@@ -108,9 +127,9 @@ function VerifyContent() {
                     <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm">
                         <Shield className="w-8 h-8" />
                     </div>
-                    <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Verify Document</h1>
+                    <h1 className="text-3xl font-bold text-slate-900 dark:text-slate-100">Verifikasi Dokumen</h1>
                     <p className="text-slate-600 dark:text-slate-400 max-w-sm mx-auto">
-                        Check the authenticity of a document by entering its ID or uploading the file directly.
+                        Cek keaslian dokumen dengan memasukkan ID atau mengunggah file secara langsung.
                     </p>
                 </div>
 
@@ -121,24 +140,24 @@ function VerifyContent() {
                     <CardContent className="pt-6">
                         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                             <TabsList className="grid w-full grid-cols-2 mb-6">
-                                <TabsTrigger value="id">By Document ID</TabsTrigger>
-                                <TabsTrigger value="file">By File Upload</TabsTrigger>
+                                <TabsTrigger value="id">ID Dokumen</TabsTrigger>
+                                <TabsTrigger value="file">Unggah File</TabsTrigger>
                             </TabsList>
 
                             <TabsContent value="id" className="space-y-4">
                                 <div className="p-6 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                                     <p className="text-sm text-center text-slate-500 mb-4">
-                                        Enter the Document ID found on the bottom of the page or in the email.
+                                        Masukkan ID Dokumen yang terdapat pada bagian bawah halaman atau di email.
                                     </p>
                                     <form onSubmit={handleVerifyId} className="space-y-3">
                                         <Input
-                                            placeholder="e.g. 123e4567-e89b..."
+                                            placeholder="cth. 123e4567-e89b..."
                                             value={verifyId}
                                             onChange={(e) => setVerifyId(e.target.value)}
                                             className="text-center font-mono placeholder:font-sans"
                                         />
                                         <Button type="submit" className="w-full" disabled={!verifyId.trim()}>
-                                            Verify Document
+                                            Verifikasi Dokumen
                                         </Button>
                                     </form>
                                 </div>
@@ -176,13 +195,13 @@ function VerifyContent() {
 
                                         <div>
                                             <p className="font-semibold text-slate-900 dark:text-slate-100">
-                                                {isVerifyingFile ? 'Verifying...' :
-                                                    fileStatus === 'success' ? 'Verified!' :
-                                                        fileStatus === 'error' ? 'Verification Failed' :
-                                                            'Click to Upload PDF'}
+                                                {isVerifyingFile ? 'Memverifikasi...' :
+                                                    fileStatus === 'success' ? 'Terverifikasi!' :
+                                                        fileStatus === 'error' ? 'Verifikasi Gagal' :
+                                                            'Klik untuk Unggah PDF'}
                                             </p>
                                             <p className="text-sm text-slate-500 mt-1">
-                                                {fileMessage || 'We check the digital signature hash'}
+                                                {fileMessage || 'Kami memeriksa hash tanda tangan digital'}
                                             </p>
                                         </div>
                                     </div>

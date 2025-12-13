@@ -1038,3 +1038,62 @@ export async function verifyDocumentByHash(fileHash: string) {
         return { success: false, error: 'Failed to verify document.', documentId: null };
     }
 }
+
+export async function getVerificationData(query: string, type: 'id' | 'hash') {
+    try {
+        let doc = null;
+
+        if (type === 'hash') {
+            const result = await sql`SELECT * FROM documents WHERE verification_hash = ${query}`;
+            if (result.rows.length > 0) doc = result.rows[0];
+        } else {
+            // ID lookup: Check UUID or Slug
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(query);
+            const result = await sql`
+                SELECT * FROM documents 
+                WHERE (${isUuid}::boolean AND id = ${query}::uuid) OR slug = ${query}
+            `;
+            if (result.rows.length > 0) doc = result.rows[0];
+        }
+
+        if (!doc) {
+            return { status: 'invalid' };
+        }
+
+        // Fetch signatures
+        const sigResult = await sql`SELECT * FROM signatures WHERE document_id = ${doc.id}`;
+
+        // Fetch audit logs
+        const logResult = await sql`SELECT * FROM audit_logs WHERE document_id = ${doc.id} ORDER BY created_at DESC`;
+
+        return {
+            status: 'valid',
+            document: {
+                id: doc.id,
+                title: doc.upload_filename,
+                created_at: doc.created_at,
+                completed_at: doc.completed_at,
+                verification_hash: doc.verification_hash,
+                page_count: doc.page_count
+            },
+            signatures: sigResult.rows.map(s => ({
+                id: s.id,
+                name: s.name,
+                email: s.email,
+                created_at: s.created_at,
+                page: s.page
+            })),
+            auditLogs: logResult.rows.map(l => ({
+                id: l.id,
+                action: l.action,
+                actor_email: l.actor_email,
+                actor_ip: l.actor_ip,
+                created_at: l.created_at,
+                details: l.details
+            }))
+        };
+    } catch (error) {
+        console.error('getVerificationData Error:', error);
+        return { status: 'error', error: 'Failed to fetch verification data' };
+    }
+}
